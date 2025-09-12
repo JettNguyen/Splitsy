@@ -1,5 +1,5 @@
 # Splitsy
-##Go Splitsies on your expenses with friends & family
+## Go Splitsies on your expenses with friends & family
 
 In the CLI, type 
 ```

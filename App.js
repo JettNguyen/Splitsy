@@ -13,7 +13,7 @@ import {
   Linking,
 } from 'react-native';
 
-const SplitSmartApp = () => {
+const SplitsyApp = () => {
   const [currentTab, setCurrentTab] = useState('home');
   const [showModal, setShowModal] = useState(null);
   const [expenseForm, setExpenseForm] = useState({
@@ -1042,4 +1042,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SplitSmartApp;
+export default SplitsyApp;

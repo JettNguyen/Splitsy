@@ -12,74 +12,105 @@ import {
   Alert,
   Linking,
 } from 'react-native';
+import { UserProvider, useUser } from './context/UserContext';
+import { DataProvider, useData } from './context/DataContext';
+import { NotificationProvider, useNotifications } from './context/NotificationContext';
+import { ToastProvider, useToast } from './context/ToastContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
+import AuthScreen from './screens/AuthScreen';
+import ProfileScreen from './screens/ProfileScreen';
+import SettlementScreen from './screens/SettlementScreen';
+import EnhancedExpenseForm from './components/EnhancedExpenseForm';
 
 const SplitsyApp = () => {
+  const { currentUser, isAuthenticated, isLoading: userLoading } = useUser();
+  const { 
+    groups, 
+    transactions, 
+    getUserGroups, 
+    getUserTransactions, 
+    calculateUserBalance,
+    addTransaction,
+    createGroup,
+    isLoading: dataLoading 
+  } = useData();
+  const { notifications, getUnreadCount, notifyExpenseAdded, markAllAsRead } = useNotifications();
+  const { showSuccess, showError, showInfo } = useToast();
+  const { theme } = useTheme();
+  
   const [currentTab, setCurrentTab] = useState('home');
   const [showModal, setShowModal] = useState(null);
   const [expenseForm, setExpenseForm] = useState({
     description: '',
     amount: '',
-    group: 1,
+    groupId: '',
+    participants: []
+  });
+  const [groupForm, setGroupForm] = useState({
+    name: '',
+    description: ''
   });
 
-  // Sample data
-  const users = [
-    { id: 1, name: 'Jett Nguyen', email: 'jett@email.com', avatar: 'JN' },
-    { id: 2, name: 'Chandler Rosen', email: 'chandler@email.com', avatar: 'CR' },
-    { id: 3, name: 'Dominic Ghizzoni', email: 'dominic@email.com', avatar: 'DG' }
-  ];
+  if (userLoading || dataLoading) {
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingEmoji}>💰</Text>
+          <Text style={styles.loadingText}>Loading Splitsy...</Text>
+          <View style={styles.loadingDots}>
+            <Text style={styles.loadingDot}>•</Text>
+            <Text style={styles.loadingDot}>•</Text>
+            <Text style={styles.loadingDot}>•</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  const groups = [
-    { id: 1, name: 'House', members: [1, 2], color: '#6366F1' },
-    { id: 2, name: 'Vegas Trip 2024', members: [1, 2, 3], color: '#EC4899' }
-  ];
+  if (!isAuthenticated) {
+    return <AuthScreen />;
+  }
 
-  const [transactions, setTransactions] = useState([
-    { id: 1, groupId: 1, payerId: 1, amount: 84.50, description: 'Grocery shopping', date: '2025-09-01', participants: [1, 2], settled: false },
-    { id: 2, groupId: 2, payerId: 2, amount: 120.00, description: 'Hotel booking', date: '2024-01-14', participants: [1, 2, 3], settled: false },
-    { id: 3, groupId: 1, payerId: 2, amount: 45.30, description: 'Utilities bill', date: '2025-08-13', participants: [1, 2], settled: true }
-  ]);
+  const userGroups = getUserGroups();
+  const userTransactions = getUserTransactions();
+  const balance = calculateUserBalance();
 
-  const calculateBalance = () => {
-    let owes = 0;
-    let owed = 0;
+  const addExpense = async (expenseData) => {
+    const result = await addTransaction(expenseData);
 
-    transactions.forEach(transaction => {
-      if (!transaction.settled && transaction.participants.includes(1)) {
-        const splitAmount = transaction.amount / transaction.participants.length;
-        
-        if (transaction.payerId === 1) {
-          owed += splitAmount * (transaction.participants.length - 1);
-        } else {
-          owes += splitAmount;
-        }
-      }
-    });
-
-    return { owes: owes.toFixed(2), owed: owed.toFixed(2), net: (owed - owes).toFixed(2) };
+    if (result.success) {
+      showSuccess('Expense added successfully!');
+      
+      // Create notification for expense
+      const group = userGroups.find(g => g.id === expenseData.groupId);
+      notifyExpenseAdded(
+        expenseData.description,
+        expenseData.amount,
+        group?.name || 'Unknown Group'
+      );
+    } else {
+      showError(result.error || 'Failed to add expense');
+    }
   };
 
-  const addExpense = () => {
-    if (!expenseForm.description || !expenseForm.amount) {
-      Alert.alert('Error', 'Please fill in all fields');
+  const addGroup = async () => {
+    if (!groupForm.name) {
+      showError('Please enter a group name');
       return;
     }
 
-    const newTransaction = {
-      id: transactions.length + 1,
-      groupId: expenseForm.group,
-      payerId: 1,
-      amount: parseFloat(expenseForm.amount),
-      description: expenseForm.description,
-      date: new Date().toISOString().split('T')[0],
-      participants: [1, 2],
-      settled: false
-    };
+    const result = await createGroup({
+      name: groupForm.name,
+      description: groupForm.description
+    });
 
-    setTransactions([newTransaction, ...transactions]);
-    setExpenseForm({ description: '', amount: '', group: 1 });
-    setShowModal(null);
-    Alert.alert('Success', 'Expense added successfully!');
+    if (result.success) {
+      setGroupForm({ name: '', description: '' });
+      setShowModal(null);
+      showSuccess('Group created successfully!');
+    } else {
+      showError(result.error || 'Failed to create group');
+    }
   };
 
   const openPaymentApp = (app, amount = '40.00', recipient = 'Chandler Rosen') => {
@@ -95,23 +126,15 @@ const SplitsyApp = () => {
   };
 
   const HomeScreen = () => {
-    const balance = calculateBalance();
-
     return (
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.headerContent}>
             <View>
-              <Text style={styles.welcomeTitle}>Hello, Jett!</Text>
-              <Text style={styles.welcomeSubtitle}>Here's your balance summary</Text>
+              <Text style={[styles.welcomeTitle, { color: theme.colors.text }]}>Hello, {currentUser.name.split(' ')[0]}!</Text>
+              <Text style={[styles.welcomeSubtitle, { color: theme.colors.textSecondary }]}>Here's your balance summary</Text>
             </View>
-            <TouchableOpacity style={styles.notificationIcon}>
-              <Text style={styles.notificationEmoji}>🔔</Text>
-              <View style={styles.notificationBadge}>
-                <Text style={styles.badgeText}>!</Text>
-              </View>
-            </TouchableOpacity>
           </View>
 
           {/* Balance Cards */}
@@ -137,12 +160,12 @@ const SplitsyApp = () => {
             <Text style={styles.netLabel}>Net Balance</Text>
             <Text style={[
               styles.netAmount, 
-              parseFloat(balance.net) >= 0 ? styles.positive : styles.negative
+              balance.net >= 0 ? styles.positive : styles.negative
             ]}>
-              ${Math.abs(parseFloat(balance.net)).toFixed(2)}
+              ${Math.abs(balance.net).toFixed(2)}
             </Text>
             <Text style={styles.netSubtext}>
-              {parseFloat(balance.net) >= 0 ? "You're ahead!" : "You owe overall"}
+              {balance.net >= 0 ? "You're ahead!" : "You owe overall"}
             </Text>
           </View>
         </View>
@@ -166,29 +189,28 @@ const SplitsyApp = () => {
         {/* Recent Activity */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Activity</Text>
             <TouchableOpacity>
-              <Text style={styles.viewAllButton}>View All</Text>
+              <Text style={[styles.viewAllButton, { color: theme.colors.primary }]}>View All</Text>
             </TouchableOpacity>
           </View>
 
-          {transactions.slice(0, 5).map((transaction) => {
-            const payer = users.find(u => u.id === transaction.payerId);
-            const group = groups.find(g => g.id === transaction.groupId);
-            const isCurrentUserPayer = transaction.payerId === 1;
+          {userTransactions.slice(0, 5).map((transaction) => {
+            const group = userGroups.find(g => g.id === transaction.groupId);
+            const isCurrentUserPayer = transaction.payerId === currentUser.id;
             const splitAmount = transaction.amount / transaction.participants.length;
 
             return (
-              <View key={transaction.id} style={styles.transactionCard}>
+              <View key={transaction.id} style={[styles.transactionCard, { backgroundColor: theme.colors.card }]}>
                 <View style={styles.transactionContent}>
                   <View style={styles.transactionLeft}>
-                    <View style={[styles.avatar, { backgroundColor: group.color }]}>
-                      <Text style={styles.avatarText}>{payer.avatar}</Text>
+                    <View style={[styles.avatar, { backgroundColor: group?.color || '#6366F1' }]}>
+                      <Text style={styles.avatarText}>{currentUser.avatar}</Text>
                     </View>
                     <View style={styles.transactionInfo}>
-                      <Text style={styles.transactionTitle}>{transaction.description}</Text>
-                      <Text style={styles.transactionSubtitle}>
-                        {group.name} • {transaction.date}
+                      <Text style={[styles.transactionTitle, { color: theme.colors.text }]}>{transaction.description}</Text>
+                      <Text style={[styles.transactionSubtitle, { color: theme.colors.textSecondary }]}>
+                        {group?.name || 'Unknown Group'} • {transaction.date}
                       </Text>
                     </View>
                   </View>
@@ -221,158 +243,359 @@ const SplitsyApp = () => {
   };
 
   const GroupsScreen = () => (
-    <ScrollView style={styles.container}>
-      <View style={styles.screenHeader}>
-        <Text style={styles.screenTitle}>Groups</Text>
-        <TouchableOpacity style={styles.addButton}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.screenHeader, { backgroundColor: theme.colors.background }]}>
+        <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Groups</Text>
+        <TouchableOpacity 
+          style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
+          onPress={() => setShowModal('group')}
+        >
           <Text style={styles.addButtonText}>➕</Text>
         </TouchableOpacity>
       </View>
       
-      {groups.map((group) => {
-        const groupTransactions = transactions.filter(t => t.groupId === group.id);
-        const totalAmount = groupTransactions.reduce((sum, t) => sum + t.amount, 0);
-        
-        return (
-          <View key={group.id} style={styles.groupCard}>
-            <View style={styles.groupHeader}>
-              <View style={styles.groupLeft}>
-                <View style={[styles.groupIcon, { backgroundColor: group.color + '20' }]}>
-                  <Text style={[styles.groupIconText, { color: group.color }]}>👥</Text>
+      {userGroups.length === 0 ? (
+        <View style={[styles.emptyState, { backgroundColor: theme.colors.background }]}>
+          <Text style={styles.emptyStateEmoji}>👥</Text>
+          <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>No Groups Yet</Text>
+          <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>Create a group to start splitting expenses with friends!</Text>
+        </View>
+      ) : (
+        userGroups.map((group) => {
+          const groupTransactions = userTransactions.filter(t => t.groupId === group.id);
+          const totalAmount = groupTransactions.reduce((sum, t) => sum + t.amount, 0);
+          
+          return (
+            <View key={group.id} style={[styles.groupCard, { backgroundColor: theme.colors.card }]}>
+              <View style={styles.groupHeader}>
+                <View style={styles.groupLeft}>
+                  <View style={[styles.groupIcon, { backgroundColor: group.color + '20' }]}>
+                    <Text style={[styles.groupIconText, { color: group.color }]}>👥</Text>
+                  </View>
+                  <View>
+                    <Text style={[styles.groupName, { color: theme.colors.text }]}>{group.name}</Text>
+                    <Text style={[styles.groupSubtitle, { color: theme.colors.textSecondary }]}>
+                      {group.members.length} members • ${totalAmount.toFixed(2)} total
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.groupName}>{group.name}</Text>
-                  <Text style={styles.groupSubtitle}>
-                    {group.members.length} members • ${totalAmount.toFixed(2)} total
-                  </Text>
-                </View>
+                <Text style={[styles.chevron, { color: theme.colors.textSecondary }]}>›</Text>
               </View>
-              <Text style={styles.chevron}>›</Text>
-            </View>
-            
-            <View style={styles.memberAvatars}>
-              {group.members.map(memberId => {
-                const member = users.find(u => u.id === memberId);
-                return (
+              
+              <View style={styles.memberAvatars}>
+                {group.members.slice(0, 4).map(memberId => (
                   <View
                     key={memberId}
                     style={[styles.memberAvatar, { backgroundColor: group.color }]}
                   >
-                    <Text style={styles.memberAvatarText}>{member.avatar}</Text>
+                    <Text style={styles.memberAvatarText}>
+                      {memberId === currentUser.id ? currentUser.avatar : 'U'}
+                    </Text>
                   </View>
-                );
-              })}
+                ))}
+                {group.members.length > 4 && (
+                  <View style={[styles.memberAvatar, { backgroundColor: '#6B7280' }]}>
+                    <Text style={styles.memberAvatarText}>+{group.members.length - 4}</Text>
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
-        );
-      })}
+          );
+        })
+      )}
     </ScrollView>
   );
 
   const ActivityScreen = () => {
-    const notifications = [
-      { id: 1, type: 'owe', amount: 42.25, to: 'Jett Nguyen', description: 'Grocery shopping' },
-      { id: 2, type: 'owed', amount: 40.00, from: 'Dominic Ghizzoni', description: 'Hotel booking' }
-    ];
+    const recentTransactions = userTransactions.slice(0, 10);
+    
+    // Calculate pending payments
+    const pendingPayments = userTransactions
+      .filter(t => !t.settled && t.payerId !== currentUser.id)
+      .map(t => ({
+        ...t,
+        splitAmount: t.amount / t.participants.length,
+        group: userGroups.find(g => g.id === t.groupId)
+      }));
+
+    const pendingReceipts = userTransactions
+      .filter(t => !t.settled && t.payerId === currentUser.id && t.participants.length > 1)
+      .map(t => ({
+        ...t,
+        splitAmount: t.amount / t.participants.length,
+        owedAmount: (t.amount / t.participants.length) * (t.participants.length - 1),
+        group: userGroups.find(g => g.id === t.groupId)
+      }));
+
+    const recentNotifications = notifications.slice(0, 8);
 
     return (
-      <ScrollView style={styles.container}>
-        <View style={styles.screenHeader}>
-          <Text style={styles.screenTitle}>Activity</Text>
+      <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.screenHeader, { backgroundColor: theme.colors.background }]}>
+          <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Activity</Text>
+          {getUnreadCount() > 0 && (
+            <TouchableOpacity 
+              style={[styles.markAllReadButton, { backgroundColor: theme.colors.primary }]}
+              onPress={async () => {
+                await markAllAsRead();
+                showInfo('All notifications marked as read');
+              }}
+            >
+              <Text style={styles.markAllReadText}>Mark All Read</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        
-        {notifications.map((notification) => (
-          <View key={notification.id} style={styles.notificationCard}>
-            <View style={styles.notificationLeft}>
-              <View style={[
-                styles.notificationIconContainer,
-                notification.type === 'owe' ? styles.oweIcon : styles.owedIcon
+
+        {/* Recent Notifications */}
+        {recentNotifications.length > 0 && (
+          <View style={styles.activitySection}>
+            <Text style={[styles.activitySectionTitle, { color: theme.colors.text }]}>🔔 Recent Notifications</Text>
+            {recentNotifications.map((notification) => (
+              <View key={notification.id} style={[
+                styles.notificationCard,
+                { backgroundColor: theme.colors.card },
+                !notification.read && styles.unreadNotification
               ]}>
-                <Text style={styles.notificationIconText}>
-                  {notification.type === 'owe' ? '↙️' : '↗️'}
-                </Text>
+                <View style={styles.notificationLeft}>
+                  <View style={[
+                    styles.notificationIcon,
+                    { backgroundColor: notification.read ? theme.colors.surface : theme.colors.primary + '20' }
+                  ]}>
+                    <Text style={styles.notificationIconText}>
+                      {notification.type === 'expense_added' ? '💰' :
+                       notification.type === 'payment_request' ? '💳' :
+                       notification.type === 'payment_received' ? '✅' :
+                       notification.type === 'group_invite' ? '👥' : '📢'}
+                    </Text>
+                  </View>
+                  <View style={styles.notificationInfo}>
+                    <Text style={[
+                      styles.notificationTitle,
+                      { color: theme.colors.text },
+                      !notification.read && styles.unreadTitle
+                    ]}>
+                      {notification.title}
+                    </Text>
+                    <Text style={[styles.notificationSubtitle, { color: theme.colors.textSecondary }]}>
+                      {notification.message}
+                    </Text>
+                    <Text style={[styles.notificationTime, { color: theme.colors.textSecondary }]}>
+                      {new Date(notification.timestamp).toLocaleDateString()}
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.notificationInfo}>
-                <Text style={styles.notificationTitle}>
-                  {notification.type === 'owe' ? 'You owe' : "You're owed"} ${notification.amount}
-                </Text>
-                <Text style={styles.notificationSubtitle}>
-                  {notification.type === 'owe' ? `to ${notification.to}` : `from ${notification.from}`} • {notification.description}
-                </Text>
-              </View>
-            </View>
-            
-            <View style={styles.notificationActions}>
-              {notification.type === 'owe' && (
-                <TouchableOpacity 
-                  style={styles.payButton}
-                  onPress={() => setShowModal('settle')}
-                >
-                  <Text style={styles.payButtonText}>Pay Now</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.remindButton}>
-                <Text style={styles.remindButtonText}>Remind</Text>
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
-        ))}
+        )}
+        
+        {/* Pending Payments */}
+        {pendingPayments.length > 0 && (
+          <View style={styles.activitySection}>
+            <Text style={[styles.activitySectionTitle, { color: theme.colors.text }]}>💳 You Owe</Text>
+            {pendingPayments.map((transaction) => (
+              <View key={transaction.id} style={[styles.notificationCard, { backgroundColor: theme.colors.card }]}>
+                <View style={styles.notificationLeft}>
+                  <View style={[styles.oweIcon, { backgroundColor: theme.colors.error + '20' }]}>
+                    <Text style={styles.notificationIconText}>↙️</Text>
+                  </View>
+                  <View style={styles.notificationInfo}>
+                    <Text style={[styles.notificationTitle, { color: theme.colors.text }]}>
+                      Pay ${transaction.splitAmount.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.notificationSubtitle, { color: theme.colors.textSecondary }]}>
+                      {transaction.group?.name || 'Unknown Group'} • {transaction.description}
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.notificationActions}>
+                  <TouchableOpacity 
+                    style={[styles.payButton, { backgroundColor: theme.colors.error }]}
+                    onPress={() => setShowModal('settle')}
+                  >
+                    <Text style={styles.payButtonText}>Pay Now</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Pending Receipts */}
+        {pendingReceipts.length > 0 && (
+          <View style={styles.activitySection}>
+            <Text style={[styles.activitySectionTitle, { color: theme.colors.text }]}>💰 You're Owed</Text>
+            {pendingReceipts.map((transaction) => (
+              <View key={transaction.id} style={[styles.notificationCard, { backgroundColor: theme.colors.card }]}>
+                <View style={styles.notificationLeft}>
+                  <View style={[styles.owedIcon, { backgroundColor: theme.colors.success + '20' }]}>
+                    <Text style={styles.notificationIconText}>↗️</Text>
+                  </View>
+                  <View style={styles.notificationInfo}>
+                    <Text style={[styles.notificationTitle, { color: theme.colors.text }]}>
+                      Collect ${transaction.owedAmount.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.notificationSubtitle, { color: theme.colors.textSecondary }]}>
+                      {transaction.group?.name || 'Unknown Group'} • {transaction.description}
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.notificationActions}>
+                  <TouchableOpacity 
+                    style={[styles.remindButton, { backgroundColor: theme.colors.success }]}
+                    onPress={() => Alert.alert('Reminder Sent', 'We\'ll remind your friends to pay you back!')}
+                  >
+                    <Text style={styles.remindButtonText}>Remind</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Recent Activity */}
+        {recentTransactions.length > 0 && (
+          <View style={styles.activitySection}>
+            <Text style={[styles.activitySectionTitle, { color: theme.colors.text }]}>📝 Recent Activity</Text>
+            {recentTransactions.map((transaction) => {
+              const group = userGroups.find(g => g.id === transaction.groupId);
+              const isCurrentUserPayer = transaction.payerId === currentUser.id;
+              const splitAmount = transaction.amount / transaction.participants.length;
+
+              return (
+                <View key={transaction.id} style={[styles.activityCard, { backgroundColor: theme.colors.card }]}>
+                  <View style={styles.activityCardContent}>
+                    <View style={styles.activityLeft}>
+                      <View style={[styles.activityIcon, { backgroundColor: group?.color || theme.colors.primary }]}>
+                        <Text style={styles.activityIconText}>
+                          {isCurrentUserPayer ? '💸' : '💳'}
+                        </Text>
+                      </View>
+                      <View style={styles.activityInfo}>
+                        <Text style={[styles.activityTitle, { color: theme.colors.text }]}>{transaction.description}</Text>
+                        <Text style={[styles.activitySubtitle, { color: theme.colors.textSecondary }]}>
+                          {group?.name || 'Unknown Group'} • {transaction.date}
+                        </Text>
+                        <Text style={[styles.activityDetail, { color: theme.colors.textSecondary }]}>
+                          {isCurrentUserPayer 
+                            ? `You paid $${transaction.amount.toFixed(2)}`
+                            : `Split $${transaction.amount.toFixed(2)}`
+                          }
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.activityRight}>
+                      <Text style={[
+                        styles.activityAmount,
+                        isCurrentUserPayer ? styles.positive : styles.negative
+                      ]}>
+                        {isCurrentUserPayer ? '+' : '-'}${splitAmount.toFixed(2)}
+                      </Text>
+                      <View style={styles.activityStatus}>
+                        <Text style={styles.statusIcon}>
+                          {transaction.settled ? '✅' : '⏱️'}
+                        </Text>
+                        <Text style={[
+                          styles.statusText,
+                          transaction.settled ? styles.settled : styles.pending
+                        ]}>
+                          {transaction.settled ? 'Settled' : 'Pending'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Empty State */}
+        {recentTransactions.length === 0 && pendingPayments.length === 0 && pendingReceipts.length === 0 && (
+          <View style={[styles.emptyState, { backgroundColor: theme.colors.background }]}>
+            <Text style={styles.emptyStateEmoji}>📱</Text>
+            <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>No Activity Yet</Text>
+            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+              Start by adding an expense or joining a group to see your activity here.
+            </Text>
+          </View>
+        )}
       </ScrollView>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#6366F1" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+      <StatusBar barStyle={theme.statusBar === 'light' ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.primary} />
       
       {/* Main Content */}
-      <View style={styles.mainContainer}>
+      <View style={[styles.mainContainer, { backgroundColor: theme.colors.background }]}>
         {currentTab === 'home' && <HomeScreen />}
         {currentTab === 'groups' && <GroupsScreen />}
         {currentTab === 'activity' && <ActivityScreen />}
-        {currentTab === 'profile' && (
-          <View style={styles.centerContainer}>
-            <Text style={styles.placeholderText}>Profile Screen</Text>
-          </View>
-        )}
+        {currentTab === 'profile' && <ProfileScreen />}
       </View>
 
       {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { backgroundColor: theme.colors.card, borderTopColor: theme.colors.border }]}>
         {[
           { id: 'home', emoji: '🏠', label: 'Home' },
           { id: 'groups', emoji: '👥', label: 'Groups' },
           { id: 'activity', emoji: '🔔', label: 'Activity' },
           { id: 'profile', emoji: '⚙️', label: 'Profile' }
-        ].map((tab) => (
-          <TouchableOpacity
-            key={tab.id}
-            style={[
-              styles.navItem,
-              currentTab === tab.id && styles.navItemActive
-            ]}
-            onPress={() => setCurrentTab(tab.id)}
-          >
-            <Text style={styles.navIcon}>{tab.emoji}</Text>
-            <Text style={[
-              styles.navLabel,
-              currentTab === tab.id && styles.navLabelActive
-            ]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        ].map((tab) => {
+          const unreadCount = tab.id === 'activity' ? getUnreadCount() : 0;
+          
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              style={[
+                styles.navItem,
+                currentTab === tab.id && styles.navItemActive
+              ]}
+              onPress={() => setCurrentTab(tab.id)}
+            >
+              <View style={styles.navIconContainer}>
+                <Text style={styles.navIcon}>{tab.emoji}</Text>
+                {unreadCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[
+                styles.navLabel,
+                currentTab === tab.id && styles.navLabelActive
+              ]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      {/* Add Expense Modal */}
-      <Modal
+      {/* Enhanced Expense Form */}
+      <EnhancedExpenseForm
         visible={showModal === 'expense'}
+        onClose={() => setShowModal(null)}
+        onSubmit={addExpense}
+        groups={userGroups}
+        currentUser={currentUser}
+      />
+
+      {/* Add Group Modal */}
+      <Modal
+        visible={showModal === 'group'}
         animationType="slide"
         presentationStyle="pageSheet"
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add Expense</Text>
+            <Text style={styles.modalTitle}>Create Group</Text>
             <TouchableOpacity onPress={() => setShowModal(null)}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
@@ -380,37 +603,54 @@ const SplitsyApp = () => {
           
           <ScrollView style={styles.modalContent}>
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Description</Text>
+              <Text style={styles.formLabel}>Group Name</Text>
               <TextInput
                 style={styles.formInput}
-                placeholder="What was this expense for?"
-                value={expenseForm.description}
-                onChangeText={(text) => setExpenseForm({...expenseForm, description: text})}
+                placeholder="e.g., House, Trip to Hawaii, Dinner"
+                value={groupForm.name}
+                onChangeText={(text) => setGroupForm({...groupForm, name: text})}
               />
             </View>
             
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Amount</Text>
-              <View style={styles.amountInputContainer}>
-                <Text style={styles.dollarSign}>$</Text>
-                <TextInput
-                  style={styles.amountInput}
-                  placeholder="0.00"
-                  keyboardType="numeric"
-                  value={expenseForm.amount}
-                  onChangeText={(text) => setExpenseForm({...expenseForm, amount: text})}
-                />
-              </View>
+              <Text style={styles.formLabel}>Description (Optional)</Text>
+              <TextInput
+                style={[styles.formInput, styles.textArea]}
+                placeholder="What's this group for?"
+                value={groupForm.description}
+                onChangeText={(text) => setGroupForm({...groupForm, description: text})}
+                multiline
+                numberOfLines={3}
+              />
             </View>
             
-            <TouchableOpacity style={styles.submitButton} onPress={addExpense}>
-              <Text style={styles.submitButtonText}>Add Expense</Text>
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>
+                💡 You can add members to this group after creating it by sharing your group code.
+              </Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={[
+                styles.submitButton,
+                !groupForm.name && styles.disabledButton
+              ]} 
+              onPress={addGroup}
+              disabled={!groupForm.name}
+            >
+              <Text style={styles.submitButtonText}>Create Group</Text>
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
       </Modal>
 
-      {/* Settle Up Modal */}
+      {/* Settlement Screen */}
+      <SettlementScreen
+        visible={showModal === 'settle'}
+        onClose={() => setShowModal(null)}
+      />
+
+      {/* Settle Up Modal - Legacy */}
       <Modal
         visible={showModal === 'settle'}
         animationType="slide"
@@ -481,6 +721,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6366F1',
+    marginBottom: 16,
+  },
+  loadingDots: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  loadingDot: {
+    fontSize: 24,
+    color: '#6366F1',
+    opacity: 0.6,
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#6B7280',
   },
   header: {
     backgroundColor: '#6366F1',
@@ -617,15 +890,31 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
   },
   viewAllButton: {
     color: '#6366F1',
     fontWeight: '600',
     fontSize: 16,
   },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyStateEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
   transactionCard: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -664,12 +953,10 @@ const styles = StyleSheet.create({
   transactionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
     marginBottom: 2,
   },
   transactionSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
   },
   transactionRight: {
     alignItems: 'flex-end',
@@ -714,9 +1001,30 @@ const styles = StyleSheet.create({
   navItemActive: {
     // Active state styling handled by text color
   },
+  navIconContainer: {
+    position: 'relative',
+    alignItems: 'center',
+  },
   navIcon: {
     fontSize: 20,
     marginBottom: 4,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -8,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
   },
   navLabel: {
     fontSize: 12,
@@ -731,14 +1039,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   screenTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
   },
   addButton: {
     backgroundColor: '#6366F1',
@@ -753,7 +1058,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   groupCard: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 24,
@@ -788,16 +1092,13 @@ const styles = StyleSheet.create({
   groupName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 2,
   },
   groupSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
   },
   chevron: {
     fontSize: 20,
-    color: '#9CA3AF',
   },
   memberAvatars: {
     flexDirection: 'row',
@@ -818,17 +1119,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   placeholderText: {
     fontSize: 18,
     color: '#6B7280',
   },
   notificationCard: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 24,
@@ -852,6 +1147,75 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  activitySection: {
+    marginBottom: 24,
+  },
+  activitySectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+    marginHorizontal: 24,
+  },
+  activityCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 24,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  activityCardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  activityLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  activityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  activityIconText: {
+    fontSize: 18,
+  },
+  activityInfo: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  activitySubtitle: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  activityDetail: {
+    fontSize: 12,
+  },
+  activityRight: {
+    alignItems: 'flex-end',
+  },
+  activityAmount: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  activityStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   oweIcon: {
     backgroundColor: '#FEE2E2',
   },
@@ -867,12 +1231,33 @@ const styles = StyleSheet.create({
   notificationTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
     marginBottom: 2,
   },
   notificationSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+  },
+  notificationTime: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  unreadNotification: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#6366F1',
+    backgroundColor: '#FEFEFE',
+  },
+  unreadTitle: {
+    fontWeight: '700',
+  },
+  markAllReadButton: {
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  markAllReadText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   notificationActions: {
     flexDirection: 'row',
@@ -946,6 +1331,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: 'white',
   },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
   amountInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -965,12 +1354,51 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
   },
+  groupSelector: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  groupOption: {
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'white',
+  },
+  groupOptionSelected: {
+    backgroundColor: '#EEF2FF',
+  },
+  groupOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  participantsInfo: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontStyle: 'italic',
+  },
+  infoBox: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#4F46E5',
+  },
   submitButton: {
     backgroundColor: '#6366F1',
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 24,
+  },
+  disabledButton: {
+    backgroundColor: '#9CA3AF',
   },
   submitButtonText: {
     color: 'white',
@@ -1042,4 +1470,21 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SplitsyApp;
+// Main App Component with Providers
+const App = () => {
+  return (
+    <ThemeProvider>
+      <UserProvider>
+        <DataProvider>
+          <NotificationProvider>
+            <ToastProvider>
+              <SplitsyApp />
+            </ToastProvider>
+          </NotificationProvider>
+        </DataProvider>
+      </UserProvider>
+    </ThemeProvider>
+  );
+};
+
+export default App;

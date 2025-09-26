@@ -1,17 +1,19 @@
 {
   "name": "splitsy",
   "version": "1.0.0",
+  "description": "A React Native expense splitting app with receipt scanning functionality",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "eject": "expo eject",
+    "install-deps": "npm install"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "^2.2.0",
-    "@react-native-ml-kit/text-recognition": "^2.0.0",
     "expo": "~54.0.9",
     "expo-camera": "~17.0.8",
     "expo-image-manipulator": "^14.0.7",
@@ -20,11 +22,24 @@
     "expo-notifications": "^0.32.11",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",
-    "react-native": "0.81.4",
-    "react-native-uuid": "^2.0.3"
+    "react-native": "0.81.4"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"
   },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "react-native",
+    "expo",
+    "expense-splitting",
+    "receipt-scanner",
+    "ocr",
+    "mobile-app"
+  ],
+  "author": "JettNguyen",
+  "license": "MIT",
   "private": true
 }

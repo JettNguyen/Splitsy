@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,8 @@ const SplitsyApp = () => {
   const { showSuccess, showError, showInfo } = useToast();
   const { theme } = useTheme();
   
+
+  
   const [currentTab, setCurrentTab] = useState('home');
   const [showModal, setShowModal] = useState(null);
   const [expenseForm, setExpenseForm] = useState({
@@ -51,16 +53,25 @@ const SplitsyApp = () => {
     description: ''
   });
 
+  // Debug loading states (development only)
+  if (__DEV__) {
+    console.log('App loading states:', { userLoading, dataLoading, isAuthenticated });
+  }
+  
   if (userLoading || dataLoading) {
     return (
-      <SafeAreaView style={styles.centerContainer}>
+      <SafeAreaView style={[styles.centerContainer, { backgroundColor: theme.colors.background }]}>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingEmoji}>💰</Text>
-          <Text style={styles.loadingText}>Loading Splitsy...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading Splitsy...</Text>
+          <Text style={[styles.debugText, { color: theme.colors.textSecondary }]}>
+            {userLoading ? 'Loading user data...' : ''} 
+            {dataLoading ? 'Loading app data...' : ''}
+          </Text>
           <View style={styles.loadingDots}>
-            <Text style={styles.loadingDot}>•</Text>
-            <Text style={styles.loadingDot}>•</Text>
-            <Text style={styles.loadingDot}>•</Text>
+            <Text style={[styles.loadingDot, { color: theme.colors.primary }]}>•</Text>
+            <Text style={[styles.loadingDot, { color: theme.colors.primary }]}>•</Text>
+            <Text style={[styles.loadingDot, { color: theme.colors.primary }]}>•</Text>
           </View>
         </View>
       </SafeAreaView>
@@ -742,6 +753,12 @@ const styles = StyleSheet.create({
     color: '#6366F1',
     marginBottom: 16,
   },
+  debugText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
   loadingDots: {
     flexDirection: 'row',
     gap: 8,
@@ -750,10 +767,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#6366F1',
     opacity: 0.6,
-  },
-  loadingText: {
-    fontSize: 18,
-    color: '#6B7280',
   },
   header: {
     backgroundColor: '#6366F1',

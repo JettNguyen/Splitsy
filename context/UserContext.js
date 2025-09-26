@@ -20,20 +20,43 @@ export const UserProvider = ({ children }) => {
   // Load user data on app start
   useEffect(() => {
     loadUserData();
+    
+    // Fail-safe timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (isLoading) {
+        console.warn('UserContext: Loading timeout reached, stopping loading state');
+        setIsLoading(false);
+      }
+    }, 5000); // 5 second timeout
+
+    return () => clearTimeout(timeout);
   }, []);
 
   const loadUserData = async () => {
     try {
       setIsLoading(true);
       
-      // Load all users
-      const storedUsers = await AsyncStorage.getItem('users');
+      // Add timeout promise
+      const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('AsyncStorage timeout')), 3000)
+      );
+      
+      // Load all users with timeout
+      const storedUsers = await Promise.race([
+        AsyncStorage.getItem('users'),
+        timeout
+      ]);
+      
       if (storedUsers) {
         setUsers(JSON.parse(storedUsers));
       }
 
-      // Load current user
-      const currentUserId = await AsyncStorage.getItem('currentUserId');
+      // Load current user with timeout
+      const currentUserId = await Promise.race([
+        AsyncStorage.getItem('currentUserId'),
+        timeout
+      ]);
+      
       if (currentUserId && storedUsers) {
         const parsedUsers = JSON.parse(storedUsers);
         const user = parsedUsers.find(u => u.id === currentUserId);
@@ -44,6 +67,7 @@ export const UserProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error loading user data:', error);
+      // Continue anyway - app should work without stored data
     } finally {
       setIsLoading(false);
     }

@@ -21,26 +21,51 @@ export const DataProvider = ({ children }) => {
   useEffect(() => {
     if (currentUser) {
       loadData();
+    } else {
+      // If no user is authenticated, we're not loading data
+      setIsLoading(false);
     }
+    
+    // Fail-safe timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (isLoading) {
+        console.warn('DataContext: Loading timeout reached, stopping loading state');
+        setIsLoading(false);
+      }
+    }, 5000); // 5 second timeout
+
+    return () => clearTimeout(timeout);
   }, [currentUser]);
 
   const loadData = async () => {
     try {
       setIsLoading(true);
       
-      // Load groups
-      const storedGroups = await AsyncStorage.getItem('groups');
+      // Add timeout promise
+      const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('AsyncStorage timeout')), 3000)
+      );
+      
+      // Load groups with timeout
+      const storedGroups = await Promise.race([
+        AsyncStorage.getItem('groups'),
+        timeout
+      ]);
       if (storedGroups) {
         setGroups(JSON.parse(storedGroups));
       }
 
-      // Load transactions
-      const storedTransactions = await AsyncStorage.getItem('transactions');
+      // Load transactions with timeout
+      const storedTransactions = await Promise.race([
+        AsyncStorage.getItem('transactions'),
+        timeout
+      ]);
       if (storedTransactions) {
         setTransactions(JSON.parse(storedTransactions));
       }
     } catch (error) {
       console.error('Error loading data:', error);
+      // Continue anyway - app should work without stored data
     } finally {
       setIsLoading(false);
     }

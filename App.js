@@ -11,6 +11,7 @@ import {
   StatusBar,
   Alert,
   Linking,
+  Platform,
 } from 'react-native';
 import { UserProvider, useUser } from './context/UserContext';
 import { DataProvider, useData } from './context/DataContext';
@@ -20,6 +21,10 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import AuthScreen from './screens/AuthScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SettlementScreen from './screens/SettlementScreen';
+import PaymentMethodsScreen from './screens/PaymentMethodsScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
+import ExpenseReportsScreen from './screens/ExpenseReportsScreen';
+import GroupManagementScreen from './screens/GroupManagementScreen';
 import EnhancedExpenseForm from './components/EnhancedExpenseForm';
 
 const SplitsyApp = () => {
@@ -42,6 +47,11 @@ const SplitsyApp = () => {
   
   const [currentTab, setCurrentTab] = useState('home');
   const [showModal, setShowModal] = useState(null);
+  
+  // Unified function to close all modals and prevent stacking
+  const closeAllModals = () => {
+    setShowModal(null);
+  };
   const [expenseForm, setExpenseForm] = useState({
     description: '',
     amount: '',
@@ -117,7 +127,7 @@ const SplitsyApp = () => {
 
     if (result.success) {
       setGroupForm({ name: '', description: '' });
-      setShowModal(null);
+      closeAllModals();
       showSuccess('Group created successfully!');
     } else {
       showError(result.error || 'Failed to create group');
@@ -140,7 +150,7 @@ const SplitsyApp = () => {
     return (
       <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
+        <View style={[styles.header, { backgroundColor: theme.colors.background }]}>
           <View style={styles.headerContent}>
             <View>
               <Text style={[styles.welcomeTitle, { color: theme.colors.text }]}>Hello, {currentUser.name.split(' ')[0]}!</Text>
@@ -150,32 +160,40 @@ const SplitsyApp = () => {
 
           {/* Balance Cards */}
           <View style={styles.balanceGrid}>
-            <View style={styles.balanceCard}>
+            <View style={[styles.balanceCard, { 
+              backgroundColor: theme.colors.card, 
+              borderLeftColor: theme.colors.success, 
+              borderLeftWidth: 4 
+            }]}>
               <View style={styles.balanceHeader}>
-                <Text style={styles.balanceIcon}>↗️</Text>
-                <Text style={styles.balanceLabel}>You're owed</Text>
+                <Text style={[styles.balanceIcon, { color: theme.colors.success }]}>↗️</Text>
+                <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>You're owed</Text>
               </View>
-              <Text style={styles.balanceAmount}>${balance.owed}</Text>
+              <Text style={[styles.balanceAmount, { color: theme.colors.success }]}>${balance.owed}</Text>
             </View>
-            <View style={styles.balanceCard}>
+            <View style={[styles.balanceCard, { 
+              backgroundColor: theme.colors.card, 
+              borderLeftColor: theme.colors.error, 
+              borderLeftWidth: 4 
+            }]}>
               <View style={styles.balanceHeader}>
-                <Text style={styles.balanceIcon}>↙️</Text>
-                <Text style={styles.balanceLabel}>You owe</Text>
+                <Text style={[styles.balanceIcon, { color: theme.colors.error }]}>↙️</Text>
+                <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>You owe</Text>
               </View>
-              <Text style={styles.balanceAmount}>${balance.owes}</Text>
+              <Text style={[styles.balanceAmount, { color: theme.colors.error }]}>${balance.owes}</Text>
             </View>
           </View>
 
           {/* Net Balance */}
-          <View style={styles.netBalance}>
-            <Text style={styles.netLabel}>Net Balance</Text>
+          <View style={[styles.netBalance, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.netLabel, { color: theme.colors.text }]}>Net Balance</Text>
             <Text style={[
               styles.netAmount, 
-              balance.net >= 0 ? styles.positive : styles.negative
+              balance.net >= 0 ? { color: theme.colors.success } : { color: theme.colors.error }
             ]}>
               ${Math.abs(balance.net).toFixed(2)}
             </Text>
-            <Text style={styles.netSubtext}>
+            <Text style={[styles.netSubtext, { color: theme.colors.textSecondary }]}>
               {balance.net >= 0 ? "You're ahead!" : "You owe overall"}
             </Text>
           </View>
@@ -184,13 +202,13 @@ const SplitsyApp = () => {
         {/* Quick Actions */}
         <View style={styles.quickActions}>
           <TouchableOpacity 
-            style={[styles.actionButton, styles.primaryButton]}
+            style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => setShowModal('expense')}
           >
             <Text style={styles.actionButtonText}>➕ Add Expense</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.actionButton, styles.successButton]}
+            style={[styles.actionButton, { backgroundColor: theme.colors.success }]}
             onPress={() => setShowModal('settle')}
           >
             <Text style={styles.actionButtonText}>✅ Settle Up</Text>
@@ -215,8 +233,8 @@ const SplitsyApp = () => {
               <View key={transaction.id} style={[styles.transactionCard, { backgroundColor: theme.colors.card }]}>
                 <View style={styles.transactionContent}>
                   <View style={styles.transactionLeft}>
-                    <View style={[styles.avatar, { backgroundColor: group?.color || '#6366F1' }]}>
-                      <Text style={styles.avatarText}>{currentUser.avatar}</Text>
+                    <View style={[styles.avatar, { backgroundColor: group?.color || theme.colors.primary }]}>
+                      <Text style={[styles.avatarText, { color: theme.colors.background }]}>{currentUser.avatar}</Text>
                     </View>
                     <View style={styles.transactionInfo}>
                       <Text style={[styles.transactionTitle, { color: theme.colors.text }]}>{transaction.description}</Text>
@@ -255,7 +273,10 @@ const SplitsyApp = () => {
 
   const GroupsScreen = () => (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.screenHeader, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.screenHeader, { 
+        backgroundColor: theme.colors.background,
+        borderBottomColor: theme.colors.border 
+      }]}>
         <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Groups</Text>
         <TouchableOpacity 
           style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
@@ -305,8 +326,8 @@ const SplitsyApp = () => {
                   </View>
                 ))}
                 {group.members.length > 4 && (
-                  <View style={[styles.memberAvatar, { backgroundColor: '#6B7280' }]}>
-                    <Text style={styles.memberAvatarText}>+{group.members.length - 4}</Text>
+                  <View style={[styles.memberAvatar, { backgroundColor: theme.colors.textTertiary }]}>
+                    <Text style={[styles.memberAvatarText, { color: theme.colors.background }]}>+{group.members.length - 4}</Text>
                   </View>
                 )}
               </View>
@@ -342,7 +363,10 @@ const SplitsyApp = () => {
 
     return (
       <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={[styles.screenHeader, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.screenHeader, { 
+          backgroundColor: theme.colors.background,
+          borderBottomColor: theme.colors.border 
+        }]}>
           <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Activity</Text>
           {getUnreadCount() > 0 && (
             <TouchableOpacity 
@@ -365,7 +389,11 @@ const SplitsyApp = () => {
               <View key={notification.id} style={[
                 styles.notificationCard,
                 { backgroundColor: theme.colors.card },
-                !notification.read && styles.unreadNotification
+                !notification.read && {
+                  borderLeftWidth: 4,
+                  borderLeftColor: theme.colors.primary,
+                  backgroundColor: theme.colors.surface
+                }
               ]}>
                 <View style={styles.notificationLeft}>
                   <View style={[
@@ -538,15 +566,28 @@ const SplitsyApp = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
-      <StatusBar barStyle={theme.statusBar === 'light' ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.primary} />
+    <View style={[styles.fullScreenContainer, { backgroundColor: theme.colors.background }]}>
+      <StatusBar 
+        barStyle={theme.statusBar === 'light' ? 'light-content' : 'dark-content'} 
+        backgroundColor={theme.colors.background}
+        translucent={true}
+      />
       
-      {/* Main Content */}
+      {/* Main Content - extends full screen including status bar area */}
       <View style={[styles.mainContainer, { backgroundColor: theme.colors.background }]}>
-        {currentTab === 'home' && <HomeScreen />}
-        {currentTab === 'groups' && <GroupsScreen />}
-        {currentTab === 'activity' && <ActivityScreen />}
-        {currentTab === 'profile' && <ProfileScreen />}
+        <SafeAreaView style={[styles.contentSafeArea, { backgroundColor: theme.colors.background }]}>
+          {currentTab === 'home' && <HomeScreen />}
+          {currentTab === 'groups' && <GroupsScreen />}
+          {currentTab === 'activity' && <ActivityScreen />}
+          {currentTab === 'profile' && 
+            <ProfileScreen 
+              onNavigateToPaymentMethods={() => setShowModal('paymentMethods')}
+              onNavigateToNotifications={() => setShowModal('notifications')}
+              onNavigateToExpenseReports={() => setShowModal('expenseReports')}
+              onNavigateToGroupManagement={() => setShowModal('groupManagement')}
+            />
+          }
+        </SafeAreaView>
       </View>
 
       {/* Bottom Navigation */}
@@ -580,7 +621,7 @@ const SplitsyApp = () => {
               </View>
               <Text style={[
                 styles.navLabel,
-                currentTab === tab.id && styles.navLabelActive
+                { color: currentTab === tab.id ? theme.colors.primary : theme.colors.textTertiary }
               ]}>
                 {tab.label}
               </Text>
@@ -592,7 +633,7 @@ const SplitsyApp = () => {
       {/* Enhanced Expense Form */}
       <EnhancedExpenseForm
         visible={showModal === 'expense'}
-        onClose={() => setShowModal(null)}
+        onClose={closeAllModals}
         onSubmit={addExpense}
         groups={userGroups}
         currentUser={currentUser}
@@ -607,7 +648,7 @@ const SplitsyApp = () => {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Create Group</Text>
-            <TouchableOpacity onPress={() => setShowModal(null)}>
+            <TouchableOpacity onPress={closeAllModals}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -636,7 +677,7 @@ const SplitsyApp = () => {
             </View>
             
             <View style={styles.infoBox}>
-              <Text style={styles.infoText}>
+              <Text style={[styles.infoText, { color: theme.colors.primary }]}>
                 💡 You can add members to this group after creating it by sharing your group code.
               </Text>
             </View>
@@ -644,7 +685,7 @@ const SplitsyApp = () => {
             <TouchableOpacity 
               style={[
                 styles.submitButton,
-                !groupForm.name && styles.disabledButton
+                { backgroundColor: !groupForm.name ? theme.colors.textTertiary : theme.colors.primary }
               ]} 
               onPress={addGroup}
               disabled={!groupForm.name}
@@ -658,7 +699,7 @@ const SplitsyApp = () => {
       {/* Settlement Screen */}
       <SettlementScreen
         visible={showModal === 'settle'}
-        onClose={() => setShowModal(null)}
+        onClose={closeAllModals}
       />
 
       {/* Settle Up Modal - Legacy */}
@@ -670,7 +711,7 @@ const SplitsyApp = () => {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Settle Up</Text>
-            <TouchableOpacity onPress={() => setShowModal(null)}>
+            <TouchableOpacity onPress={closeAllModals}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -686,10 +727,10 @@ const SplitsyApp = () => {
                 ].map((method) => (
                   <TouchableOpacity
                     key={method.key}
-                    style={styles.paymentButton}
+                    style={[styles.paymentButton, { backgroundColor: theme.colors.primary }]}
                     onPress={() => {
                       openPaymentApp(method.key);
-                      setShowModal(null);
+                      closeAllModals();
                     }}
                   >
                     <Text style={styles.paymentEmoji}>{method.emoji}</Text>
@@ -708,7 +749,7 @@ const SplitsyApp = () => {
                 style={styles.sendButton}
                 onPress={() => {
                   openPaymentApp('venmo');
-                  setShowModal(null);
+                  closeAllModals();
                 }}
               >
                 <Text style={styles.sendButtonText}>Send 📤</Text>
@@ -717,27 +758,85 @@ const SplitsyApp = () => {
           </ScrollView>
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
+
+      {/* Payment Methods Screen */}
+      <Modal
+        visible={showModal === 'paymentMethods'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <PaymentMethodsScreen 
+          visible={showModal === 'paymentMethods'}
+          onClose={closeAllModals} 
+        />
+      </Modal>
+
+      {/* Notifications Screen */}
+      <Modal
+        visible={showModal === 'notifications'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <NotificationsScreen 
+          visible={showModal === 'notifications'}
+          onClose={closeAllModals} 
+        />
+      </Modal>
+
+      {/* Expense Reports Screen */}
+      <Modal
+        visible={showModal === 'expenseReports'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <ExpenseReportsScreen 
+          visible={showModal === 'expenseReports'}
+          onClose={closeAllModals} 
+        />
+      </Modal>
+
+      {/* Group Management Screen */}
+      <Modal
+        visible={showModal === 'groupManagement'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <GroupManagementScreen 
+          visible={showModal === 'groupManagement'}
+          onClose={closeAllModals} 
+        />
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  fullScreenContainer: {
+    flex: 1,
+    // backgroundColor handled by theme
+  },
   safeArea: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    paddingTop: 0, // Let SafeAreaView handle top inset
+    // backgroundColor handled by theme
   },
   mainContainer: {
     flex: 1,
+    paddingBottom: 0, // Remove any bottom padding to let bottom nav handle it
+  },
+  contentSafeArea: {
+    flex: 1,
+    paddingBottom: 90, // Add padding to account for absolute positioned bottom nav
   },
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    // backgroundColor handled by theme
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    // backgroundColor handled by theme
   },
   loadingContainer: {
     alignItems: 'center',
@@ -750,12 +849,12 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#6366F1',
+    // color handled by theme
     marginBottom: 16,
   },
   debugText: {
     fontSize: 12,
-    color: '#6B7280',
+    // color handled by theme
     marginBottom: 8,
     textAlign: 'center',
   },
@@ -765,11 +864,11 @@ const styles = StyleSheet.create({
   },
   loadingDot: {
     fontSize: 24,
-    color: '#6366F1',
+    // color handled by theme
     opacity: 0.6,
   },
   header: {
-    backgroundColor: '#6366F1',
+    // backgroundColor handled by theme
     paddingHorizontal: 24,
     paddingVertical: 32,
   },
@@ -818,7 +917,7 @@ const styles = StyleSheet.create({
   },
   balanceCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    // backgroundColor handled by theme
     borderRadius: 12,
     padding: 16,
   },
@@ -832,22 +931,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   balanceLabel: {
-    color: 'rgba(255,255,255,0.8)',
+    // color handled by theme
     fontSize: 14,
   },
   balanceAmount: {
     fontSize: 24,
     fontWeight: '700',
-    color: 'white',
+    // color handled by theme
   },
   netBalance: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    // backgroundColor handled by theme
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
   },
   netLabel: {
-    color: 'rgba(255,255,255,0.8)',
+    // color handled by theme
     fontSize: 14,
     marginBottom: 4,
   },
@@ -857,13 +956,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   positive: {
-    color: '#10B981',
+    // color handled by theme
   },
   negative: {
-    color: '#F87171',
+    // color handled by theme
   },
   netSubtext: {
-    color: 'rgba(255,255,255,0.7)',
+    // color handled by theme
     fontSize: 12,
   },
   quickActions: {
@@ -880,10 +979,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryButton: {
-    backgroundColor: '#6366F1',
+    // backgroundColor handled by theme (purple)
   },
   successButton: {
-    backgroundColor: '#10B981',
+    // backgroundColor handled by theme (green)
   },
   actionButtonText: {
     color: 'white',
@@ -905,7 +1004,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   viewAllButton: {
-    color: '#6366F1',
+    // color handled by theme (purple)
     fontWeight: '600',
     fontSize: 16,
   },
@@ -997,19 +1096,25 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
   },
   bottomNav: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
-    paddingVertical: 8,
+    paddingVertical: 8, // Reduced to make it shorter
     paddingHorizontal: 16,
+    paddingBottom: 34, // Extra bottom padding for iPhone home indicator area
     justifyContent: 'space-around',
   },
   navItem: {
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6, // Reduced to make navigation shorter
+    paddingHorizontal: 12, // Reduced horizontal padding
     borderRadius: 8,
+    minHeight: 40, // Reduced minimum height for shorter nav bar
   },
   navItemActive: {
     // Active state styling handled by text color
@@ -1019,8 +1124,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   navIcon: {
-    fontSize: 20,
-    marginBottom: 4,
+    fontSize: 18, // Reduced for shorter nav bar
+    marginBottom: 2, // Reduced spacing for compact design
   },
   notificationBadge: {
     position: 'absolute',
@@ -1041,10 +1146,10 @@ const styles = StyleSheet.create({
   },
   navLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    // color handled by theme
   },
   navLabelActive: {
-    color: '#6366F1',
+    // color handled by theme
   },
   screenHeader: {
     flexDirection: 'row',
@@ -1059,7 +1164,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   addButton: {
-    backgroundColor: '#6366F1',
+    // backgroundColor handled by theme (purple)
     borderRadius: 8,
     width: 40,
     height: 40,
@@ -1254,15 +1359,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   unreadNotification: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#6366F1',
-    backgroundColor: '#FEFEFE',
+    // styling handled inline with theme colors
   },
   unreadTitle: {
     fontWeight: '700',
   },
   markAllReadButton: {
-    backgroundColor: '#6366F1',
+    // backgroundColor handled by theme (purple)
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
@@ -1277,7 +1380,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   payButton: {
-    backgroundColor: '#6366F1',
+    // backgroundColor handled by theme (red for pay)
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -1401,17 +1504,17 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 14,
-    color: '#4F46E5',
+    // color handled by theme (purple)
   },
   submitButton: {
-    backgroundColor: '#6366F1',
+    // backgroundColor handled by theme (purple)
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 24,
   },
   disabledButton: {
-    backgroundColor: '#9CA3AF',
+    // backgroundColor handled inline with theme
   },
   submitButtonText: {
     color: 'white',
@@ -1435,7 +1538,7 @@ const styles = StyleSheet.create({
   },
   paymentButton: {
     flex: 1,
-    backgroundColor: '#6366F1',
+    // backgroundColor handled by theme (purple)
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',

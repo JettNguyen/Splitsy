@@ -15,7 +15,12 @@ import { useUser } from '../context/UserContext';
 import { useData } from '../context/DataContext';
 import { useTheme } from '../context/ThemeContext';
 
-const ProfileScreen = () => {
+const ProfileScreen = ({ 
+  onNavigateToPaymentMethods,
+  onNavigateToNotifications,
+  onNavigateToExpenseReports,
+  onNavigateToGroupManagement 
+}) => {
   const { currentUser, logoutUser, updateUser } = useUser();
   const { calculateUserBalance } = useData();
   const { theme, isDarkMode, toggleTheme } = useTheme();
@@ -26,7 +31,8 @@ const ProfileScreen = () => {
     phone: currentUser?.phone || ''
   });
 
-  const balance = calculateUserBalance();
+  const balanceData = calculateUserBalance();
+  const balance = balanceData?.net || 0;
 
   const handleLogout = () => {
     Alert.alert(
@@ -88,8 +94,9 @@ const ProfileScreen = () => {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.surface }]}>
-      <ScrollView style={styles.scrollContainer}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <SafeAreaView style={styles.safeAreaTop} />
+      <ScrollView style={[styles.scrollContainer, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.scrollContent}>
         {/* Profile Header */}
         <View style={[styles.profileHeader, { backgroundColor: theme.colors.card }]}>
           <View style={[styles.avatarContainer, { backgroundColor: theme.colors.primary }]}>
@@ -135,8 +142,12 @@ const ProfileScreen = () => {
               <Switch
                 value={isDarkMode}
                 onValueChange={toggleTheme}
-                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                thumbColor={theme.colors.card}
+                trackColor={{ 
+                  false: theme.colors.textTertiary, 
+                  true: theme.colors.primary 
+                }}
+                thumbColor={isDarkMode ? theme.colors.card : '#FFFFFF'}
+                ios_backgroundColor={theme.colors.textTertiary}
               />
             </View>
           </View>
@@ -144,13 +155,13 @@ const ProfileScreen = () => {
             icon="💳"
             title="Payment Methods"
             subtitle="Manage your payment apps"
-            onPress={() => Alert.alert('Coming Soon', 'Payment method management will be available in a future update')}
+            onPress={onNavigateToPaymentMethods}
           />
           <MenuItem
             icon="🔔"
             title="Notifications"
             subtitle="Manage notification preferences"
-            onPress={() => Alert.alert('Coming Soon', 'Notification settings will be available in a future update')}
+            onPress={onNavigateToNotifications}
           />
         </MenuSection>
 
@@ -160,13 +171,13 @@ const ProfileScreen = () => {
             icon="👥"
             title="Manage Groups"
             subtitle="View and edit your groups"
-            onPress={() => Alert.alert('Coming Soon', 'Group management will be available in a future update')}
+            onPress={onNavigateToGroupManagement}
           />
           <MenuItem
             icon="📊"
             title="Expense Reports"
             subtitle="View detailed spending reports"
-            onPress={() => Alert.alert('Coming Soon', 'Expense reports will be available in a future update')}
+            onPress={onNavigateToExpenseReports}
           />
         </MenuSection>
 
@@ -256,7 +267,7 @@ const ProfileScreen = () => {
           </ScrollView>
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -264,14 +275,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  safeAreaTop: {
+    flex: 0,
+  },
   scrollContainer: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 34, // Extra padding for devices with home indicator
   },
   profileHeader: {
     alignItems: 'center',
     padding: 24,
     marginHorizontal: 16,
     marginTop: 16,
+    marginBottom: 32, // Increased spacing to account section
     borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },

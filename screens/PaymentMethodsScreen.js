@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,47 +9,170 @@ import {
   TextInput,
   Alert,
   SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  Animated,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
 const PaymentMethodsScreen = ({ visible, onClose }) => {
   const { theme } = useTheme();
+  const paymentTypes = ['Venmo', 'PayPal', 'CashApp', 'Zelle'];
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newMethod, setNewMethod] = useState({ type: 'Venmo', handle: '' });
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  
+  // Animation values for smooth drag gestures
+  const translateY = useRef(new Animated.Value(0)).current;
+  const { height } = Dimensions.get('window');
+  
+  // Enhanced pan responder for immediate drag response
+  const panResponder = PanResponder.create({
+    onMoveShouldSetPanResponder: (evt, gestureState) => {
+      return Math.abs(gestureState.dy) > 3 && gestureState.dy > 0 && !keyboardVisible;
+    },
+    onPanResponderGrant: () => {
+      translateY.setOffset(translateY._value);
+    },
+    onPanResponderMove: (evt, gestureState) => {
+      if (gestureState.dy > 0 && !keyboardVisible) {
+        translateY.setValue(gestureState.dy * 0.75);
+      }
+    },
+    onPanResponderRelease: (evt, gestureState) => {
+      translateY.flattenOffset();
+      if ((gestureState.dy > height * 0.2 || gestureState.vy > 1.2) && !keyboardVisible) {
+        Animated.timing(translateY, {
+          toValue: height,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => onClose());
+      } else {
+        Animated.spring(translateY, {
+          toValue: 0,
+          damping: 15,
+          stiffness: 150,
+          useNativeDriver: true,
+        }).start();
+      }
+    },
+  });
 
-  const paymentTypes = ['Venmo', 'PayPal', 'CashApp', 'Zelle', 'Bank Transfer'];
-
-  const addPaymentMethod = () => {
-    if (!newMethod.handle.trim()) {
-      Alert.alert('Error', 'Please enter a valid handle');
-      return;
+  // Reset to valid type when modal opens or payment methods change
+  useEffect(() => {
+    if (showAddModal) {
+      ensureValidSelectedType();
     }
-    
-    const newId = paymentMethods.length > 0 ? Math.max(...paymentMethods.map(m => m.id)) + 1 : 1;
-    setPaymentMethods([...paymentMethods, {
-      id: newId,
-      type: newMethod.type,
-      handle: newMethod.handle.trim(),
-      verified: false
-    }]);
-    
-    setNewMethod({ type: 'Venmo', handle: '' });
-    setShowAddModal(false);
-    Alert.alert('Success', 'Payment method added successfully!');
+  }, [showAddModal, paymentMethods]);
+
+  // Keyboard visibility listeners
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
+  }, []);
+
+  const getMethodIcon = (type) => {
+    switch (type) {
+      case 'Venmo': return '💙';
+      case 'PayPal': return '💰';
+      case 'CashApp': return '💵';
+      case 'Zelle': return '⚡';
+      default: return '💳';
+    }
   };
 
-  const removePaymentMethod = (id) => {
+  const getInputSymbol = (type) => {
+    switch (type) {
+      case 'Venmo': return '@';
+      case 'PayPal': return '@';
+      case 'CashApp': return '$';
+      case 'Zelle': return '';
+      default: return '';
+    }
+  };
+
+  const getInputLabel = (type) => {
+    switch (type) {
+      case 'Venmo': return 'Venmo Username';
+      case 'PayPal': return 'PayPal Username';
+      case 'CashApp': return 'CashApp Handle';
+      case 'Zelle': return 'Email or Phone Number';
+      default: return 'Handle';
+    }
+  };
+
+  const getAvailablePaymentTypes = () => {
+    const addedTypes = paymentMethods.map(method => method.type);
+    return paymentTypes.filter(type => !addedTypes.includes(type));
+  };
+
+  const ensureValidSelectedType = () => {
+    const availableTypes = getAvailablePaymentTypes();
+    if (availableTypes.length > 0 && !availableTypes.includes(newMethod.type)) {
+      setNewMethod({ ...newMethod, type: availableTypes[0], handle: '' });
+    }
+  };
+
+  const getPlaceholderText = (type) => {
+    switch (type) {
+      case 'Venmo':
+        return 'username';
+      case 'PayPal':
+        return 'username';
+      case 'CashApp':
+        return 'cashtag';
+      case 'Zelle':
+        return 'email@domain.com or phone number';
+      default:
+        return 'Enter your handle';
+    }
+  };
+
+  const addPaymentMethod = () => {
+    if (!newMethod.handle.trim()) return;
+    
+    let processedHandle = newMethod.handle.trim();
+    
+    // Clean up CashApp handle (remove $ if user added it)
+    if (newMethod.type === 'CashApp' && processedHandle.startsWith('$')) {
+      processedHandle = processedHandle.substring(1);
+    }
+    
+    const method = {
+      id: Date.now().toString(),
+      type: newMethod.type,
+      handle: processedHandle,
+    };
+    
+    setPaymentMethods([...paymentMethods, method]);
+    setNewMethod({ type: 'Venmo', handle: '' });
+    setShowAddModal(false);
+  };
+
+  const deletePaymentMethod = (id) => {
     Alert.alert(
-      'Remove Payment Method',
+      'Delete Payment Method',
       'Are you sure you want to remove this payment method?',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Remove', 
+          text: 'Delete', 
           style: 'destructive',
           onPress: () => {
-            setPaymentMethods(paymentMethods.filter(m => m.id !== id));
+            setPaymentMethods(paymentMethods.filter(method => method.id !== id));
           }
         }
       ]
@@ -59,163 +182,230 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
   const PaymentMethodCard = ({ method }) => (
     <View style={[styles.methodCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
       <View style={styles.methodInfo}>
-        <View style={[styles.methodIcon, { backgroundColor: getMethodColor(method.type) }]}>
-          <Text style={styles.methodIconText}>{getMethodIcon(method.type)}</Text>
-        </View>
+        <Text style={styles.methodIcon}>{getMethodIcon(method.type)}</Text>
         <View style={styles.methodDetails}>
           <Text style={[styles.methodType, { color: theme.colors.text }]}>{method.type}</Text>
-          <Text style={[styles.methodHandle, { color: theme.colors.textSecondary }]}>{method.handle}</Text>
-        </View>
-        <View style={styles.methodStatus}>
-          {method.verified ? (
-            <View style={[styles.verifiedBadge, { backgroundColor: theme.colors.success }]}>
-              <Text style={styles.verifiedText}>✓ Verified</Text>
-            </View>
-          ) : (
-            <Text style={[styles.unverifiedText, { color: theme.colors.warning }]}>Pending</Text>
-          )}
+          <Text style={[styles.methodHandle, { color: theme.colors.textSecondary }]}>
+            {getInputSymbol(method.type)}{method.handle}
+          </Text>
         </View>
       </View>
-      <TouchableOpacity
-        style={[styles.removeButton, { backgroundColor: theme.colors.error }]}
-        onPress={() => removePaymentMethod(method.id)}
+      <TouchableOpacity 
+        onPress={() => deletePaymentMethod(method.id)}
+        style={styles.deleteButton}
       >
-        <Text style={styles.removeButtonText}>Remove</Text>
+        <Text style={[styles.deleteButtonText, { color: theme.colors.error }]}>×</Text>
       </TouchableOpacity>
     </View>
   );
 
-  const getMethodIcon = (type) => {
-    switch (type) {
-      case 'Venmo': return '💙';
-      case 'PayPal': return '💰';
-      case 'CashApp': return '💵';
-      case 'Zelle': return '🏦';
-      case 'Bank Transfer': return '🏛️';
-      default: return '💳';
-    }
-  };
-
-  const getMethodColor = (type) => {
-    switch (type) {
-      case 'Venmo': return '#3D95CE';
-      case 'PayPal': return '#003087';
-      case 'CashApp': return '#00D632';
-      case 'Zelle': return '#6D1ED4';
-      case 'Bank Transfer': return '#1F2937';
-      default: return '#64748B';
-    }
-  };
-
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary }]}>Cancel</Text>
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Payment Methods</Text>
-          <TouchableOpacity onPress={() => setShowAddModal(true)} style={[styles.addButton, { backgroundColor: theme.colors.accent }]}>
-            <Text style={styles.addButtonText}>Add</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Manage your payment methods for quick settlements
-          </Text>
-
-          {paymentMethods.map((method) => (
-            <PaymentMethodCard key={method.id} method={method} />
-          ))}
-
-          {paymentMethods.length === 0 && (
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                No payment methods added yet
-              </Text>
-              <TouchableOpacity
-                style={[styles.emptyButton, { backgroundColor: theme.colors.primary }]}
-                onPress={() => setShowAddModal(true)}
-              >
-                <Text style={[styles.emptyButtonText, { color: theme.colors.background }]}>Add Your First Method</Text>
-              </TouchableOpacity>
+    <Modal 
+      visible={visible} 
+      animationType="slide" 
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <Animated.View 
+        style={[
+          { flex: 1 }, 
+          { 
+            backgroundColor: theme.colors.background,
+            transform: [{ translateY }]
+          }
+        ]}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 60}
+          style={{ flex: 1 }}
+        >
+          <View style={[styles.backgroundExtension, { backgroundColor: theme.colors.background }]} />
+          <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            {/* Enhanced Drag Indicator */}
+            <View style={styles.dragIndicatorContainer} {...panResponder.panHandlers}>
+              <View style={[styles.dragIndicator, { backgroundColor: theme.colors.textTertiary }]} />
             </View>
-          )}
-        </ScrollView>
+          
+          {/* Header */}
+          <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary, opacity: 0.7 }]}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={[styles.title, { color: theme.colors.text }]}>Payment Methods</Text>
+            {getAvailablePaymentTypes().length > 0 ? (
+              <TouchableOpacity onPress={() => setShowAddModal(true)} style={[styles.addButton, { backgroundColor: theme.colors.accent }]}>
+                <Text style={styles.addButtonText}>Add</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.addButton, { backgroundColor: theme.colors.surface }]}>
+                <Text style={[styles.addButtonText, { color: theme.colors.textSecondary }]}>Complete</Text>
+              </View>
+            )}
+          </View>
 
-        {/* Add Payment Method Modal */}
-        <Modal visible={showAddModal} animationType="slide" transparent={true}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Add Payment Method</Text>
+          <ScrollView 
+            style={styles.content} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: (!showAddModal && !keyboardVisible) ? 16 : 80 }
+            ]}
+          >
+            {paymentMethods.map((method) => (
+              <PaymentMethodCard key={method.id} method={method} />
+            ))}
+
+            {paymentMethods.length > 0 && getAvailablePaymentTypes().length === 0 && (
+              <View style={styles.completedState}>
+                <Text style={[styles.completedText, { color: theme.colors.textSecondary }]}>
+                  🎉 All payment methods added! You're ready to settle expenses.
+                </Text>
+              </View>
+            )}
+
+            {paymentMethods.length === 0 && !showAddModal && getAvailablePaymentTypes().length > 0 && (
+              <View style={styles.emptyState}>
+                <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                  No payment methods added yet
+                </Text>
+                <TouchableOpacity 
+                  style={[styles.emptyButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => setShowAddModal(true)}
+                >
+                  <Text style={[styles.emptyButtonText, { color: 'white' }]}>Add Your First Method</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Add Payment Method Form */}
+          {showAddModal && getAvailablePaymentTypes().length > 0 && (
+            <View style={[styles.addForm, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+              <View style={styles.addFormHeader}>
+                <Text style={[styles.addFormTitle, { color: theme.colors.text }]}>Add New Payment Method</Text>
+                <TouchableOpacity onPress={() => setShowAddModal(false)} style={styles.closeFormButton}>
+                  <Text style={[styles.closeFormButtonText, { color: theme.colors.textSecondary }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
               
               <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Payment Type</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeSelector}>
-                {paymentTypes.map((type) => (
+                {getAvailablePaymentTypes().map((type) => (
                   <TouchableOpacity
                     key={type}
                     style={[
                       styles.typeButton,
-                      { backgroundColor: newMethod.type === type ? theme.colors.primary : theme.colors.surface },
+                      { 
+                        backgroundColor: newMethod.type === type ? theme.colors.primary : theme.colors.surface,
+                        borderColor: newMethod.type === type ? theme.colors.primary : theme.colors.border
+                      },
                     ]}
                     onPress={() => setNewMethod({ ...newMethod, type })}
                   >
+                    <Text style={styles.typeButtonEmoji}>{getMethodIcon(type)}</Text>
                     <Text style={[styles.typeButtonText, { 
-                      color: newMethod.type === type ? theme.colors.background : theme.colors.text 
+                      color: newMethod.type === type ? 'white' : theme.colors.text 
                     }]}>
-                      {getMethodIcon(type)} {type}
+                      {type}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
 
-              <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Handle/Email</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
-                placeholder={`Enter your ${newMethod.type} handle`}
-                placeholderTextColor={theme.colors.textTertiary}
-                value={newMethod.handle}
-                onChangeText={(text) => setNewMethod({ ...newMethod, handle: text })}
-              />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, { backgroundColor: theme.colors.surface }]}
-                  onPress={() => setShowAddModal(false)}
-                >
-                  <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
-                  onPress={addPaymentMethod}
-                >
-                  <Text style={[styles.modalButtonText, { color: theme.colors.background }]}>Add Method</Text>
-                </TouchableOpacity>
+              <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                {getInputLabel(newMethod.type)}
+              </Text>
+              <View style={styles.inputContainer}>
+                {getInputSymbol(newMethod.type) !== '' && (
+                  <Text style={[styles.inputSymbol, { color: theme.colors.textSecondary }]}>
+                    {getInputSymbol(newMethod.type)}
+                  </Text>
+                )}
+                <TextInput
+                  style={[styles.input, {
+                    backgroundColor: theme.colors.surface, 
+                    color: theme.colors.text, 
+                    borderColor: theme.colors.border,
+                    paddingLeft: getInputSymbol(newMethod.type) !== '' ? 8 : 12
+                  }]}
+                  placeholder={getPlaceholderText(newMethod.type)}
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={newMethod.handle}
+                  onChangeText={(text) => setNewMethod({ ...newMethod, handle: text })}
+                  autoFocus={true}
+                />
               </View>
+
+              <TouchableOpacity 
+                style={[styles.addFormButton, { backgroundColor: theme.colors.primary }]}
+                onPress={addPaymentMethod}
+                disabled={!newMethod.handle.trim()}
+              >
+                <Text style={[styles.addFormButtonText, { color: 'white' }]}>Add Method</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-        </Modal>
-      </SafeAreaView>
+          )}
+          
+          {/* Done Button - Hidden when adding new method or keyboard is visible */}
+          {!showAddModal && !keyboardVisible && (
+            <View style={[styles.doneButtonContainer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+              <TouchableOpacity 
+                style={[styles.doneButton, { backgroundColor: theme.colors.primary }]}
+                onPress={onClose}
+              >
+                <Text style={styles.doneButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Animated.View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  backgroundExtension: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: -200, // Extend below the visible area to cover keyboard area
+    zIndex: -1,
+  },
   container: {
     flex: 1,
+    ...(Platform.OS === 'ios' && {
+      paddingBottom: 0, // Remove any bottom padding on iOS
+    }),
+  },
+  dragIndicatorContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  dragIndicator: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    opacity: 0.5,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    // paddingBottom is now dynamic based on Done button visibility
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderBottomWidth: 1,
   },
   closeButton: {
-    padding: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   closeButtonText: {
     fontSize: 16,
@@ -225,44 +415,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   addButton: {
-    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
   },
   addButtonText: {
     color: 'white',
     fontWeight: '600',
+    fontSize: 14,
   },
   content: {
     flex: 1,
-    padding: 16,
-  },
-  subtitle: {
-    fontSize: 14,
-    marginBottom: 20,
-    textAlign: 'center',
+    paddingHorizontal: 16,
   },
   methodCard: {
-    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
-    marginBottom: 12,
+    marginVertical: 6,
+    borderRadius: 12,
     borderWidth: 1,
   },
   methodInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    flex: 1,
   },
   methodIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  methodIconText: {
     fontSize: 24,
+    marginRight: 12,
   },
   methodDetails: {
     flex: 1,
@@ -270,72 +452,97 @@ const styles = StyleSheet.create({
   methodType: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   methodHandle: {
     fontSize: 14,
   },
-  methodStatus: {
-    alignItems: 'flex-end',
-  },
-  verifiedBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  verifiedText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  unverifiedText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  removeButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  removeButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  emptyButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  emptyButtonText: {
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  deleteButton: {
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalContent: {
-    margin: 20,
-    borderRadius: 12,
-    padding: 20,
-    minWidth: 300,
+  deleteButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
   },
-  modalTitle: {
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  emptyButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  emptyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  completedState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  completedText: {
+    fontSize: 16,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  doneButtonContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16, // Account for home indicator
+    borderTopWidth: 1,
+    marginTop: 'auto', // Push to bottom
+  },
+  doneButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneButtonText: {
+    color: 'white',
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 20,
-    textAlign: 'center',
+  },
+  addForm: {
+    margin: 16,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    marginBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  addFormHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  addFormTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  closeFormButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeFormButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   inputLabel: {
     fontSize: 14,
@@ -346,34 +553,47 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   typeButton: {
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 12,
     marginRight: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  typeButtonEmoji: {
+    fontSize: 16,
+    marginRight: 6,
   },
   typeButtonText: {
     fontSize: 14,
     fontWeight: '500',
   },
-  input: {
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  inputSymbol: {
     fontSize: 16,
+    fontWeight: '500',
+    paddingLeft: 12,
   },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  modalButton: {
+  input: {
     flex: 1,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 0,
+  },
+  addFormButton: {
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  modalButtonText: {
+  addFormButtonText: {
+    fontSize: 16,
     fontWeight: '600',
   },
 });

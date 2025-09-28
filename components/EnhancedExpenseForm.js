@@ -138,13 +138,21 @@ const EnhancedExpenseForm = ({
 
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Expense Details</Text>
+      <Text style={[styles.stepTitle, { color: theme.colors.text }]}>Expense Details</Text>
       
       <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>What did you pay for?</Text>
+        <Text style={[styles.formLabel, { color: theme.colors.text }]}>What did you pay for?</Text>
         <TextInput
-          style={styles.formInput}
+          style={[
+            styles.formInput, 
+            { 
+              backgroundColor: theme.colors.card, 
+              borderColor: theme.colors.border, 
+              color: theme.colors.text 
+            }
+          ]}
           placeholder="e.g., Dinner at restaurant, Groceries"
+          placeholderTextColor={theme.colors.textSecondary}
           value={formData.description}
           onChangeText={(text) => setFormData({...formData, description: text})}
         />
@@ -153,24 +161,37 @@ const EnhancedExpenseForm = ({
       {/* Receipt Scanner Button */}
       <View style={styles.formGroup}>
         <TouchableOpacity 
-          style={styles.receiptScanButton}
+          style={[
+            styles.receiptScanButton,
+            { 
+              backgroundColor: theme.colors.primary + '20', 
+              borderColor: theme.colors.primary 
+            }
+          ]}
           onPress={() => setShowReceiptScanner(true)}
         >
           <Text style={styles.receiptScanEmoji}>📷</Text>
           <View style={styles.receiptScanTextContainer}>
-            <Text style={styles.receiptScanText}>Scan Receipt</Text>
-            <Text style={styles.receiptScanSubtext}>Auto-fill from receipt photo</Text>
+            <Text style={[styles.receiptScanText, { color: theme.colors.primary }]}>Scan Receipt</Text>
+            <Text style={[styles.receiptScanSubtext, { color: theme.colors.primary }]}>Auto-fill from receipt photo</Text>
           </View>
         </TouchableOpacity>
       </View>
 
       <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>How much?</Text>
-        <View style={styles.amountInputContainer}>
-          <Text style={styles.dollarSign}>$</Text>
+        <Text style={[styles.formLabel, { color: theme.colors.text }]}>How much?</Text>
+        <View style={[
+          styles.amountInputContainer,
+          { 
+            backgroundColor: theme.colors.card, 
+            borderColor: theme.colors.border 
+          }
+        ]}>
+          <Text style={[styles.dollarSign, { color: theme.colors.textSecondary }]}>$</Text>
           <TextInput
-            style={styles.amountInput}
+            style={[styles.amountInput, { color: theme.colors.text }]}
             placeholder="0.00"
+            placeholderTextColor={theme.colors.textSecondary}
             keyboardType="numeric"
             value={formData.amount}
             onChangeText={(text) => setFormData({...formData, amount: text})}
@@ -179,7 +200,7 @@ const EnhancedExpenseForm = ({
       </View>
 
       <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Category</Text>
+        <Text style={[styles.formLabel, { color: theme.colors.text }]}>Category</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.categoryContainer}>
             {ExpenseCategories.map((category) => (
@@ -187,13 +208,16 @@ const EnhancedExpenseForm = ({
                 key={category.id}
                 style={[
                   styles.categoryOption,
-                  formData.category === category.id && styles.categoryOptionSelected,
-                  { borderColor: category.color }
+                  { 
+                    backgroundColor: theme.colors.card,
+                    borderColor: formData.category === category.id ? theme.colors.primary : theme.colors.border
+                  },
+                  formData.category === category.id && { backgroundColor: theme.colors.primary + '20' }
                 ]}
                 onPress={() => setFormData({...formData, category: category.id})}
               >
                 <Text style={styles.categoryEmoji}>{category.emoji}</Text>
-                <Text style={styles.categoryName}>{category.name}</Text>
+                <Text style={[styles.categoryName, { color: theme.colors.text }]}>{category.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -201,10 +225,19 @@ const EnhancedExpenseForm = ({
       </View>
 
       <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Notes (Optional)</Text>
+        <Text style={[styles.formLabel, { color: theme.colors.text }]}>Notes (Optional)</Text>
         <TextInput
-          style={[styles.formInput, styles.textArea]}
+          style={[
+            styles.formInput, 
+            styles.textArea,
+            { 
+              backgroundColor: theme.colors.card, 
+              borderColor: theme.colors.border, 
+              color: theme.colors.text 
+            }
+          ]}
           placeholder="Add any additional details..."
+          placeholderTextColor={theme.colors.textSecondary}
           value={formData.notes}
           onChangeText={(text) => setFormData({...formData, notes: text})}
           multiline
@@ -216,71 +249,89 @@ const EnhancedExpenseForm = ({
 
   const renderStep2 = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Select Group</Text>
+      <Text style={[styles.stepTitle, { color: theme.colors.text }]}>Select Group</Text>
       
-      {groups.map((group) => (
-        <TouchableOpacity
-          key={group.id}
-          style={[
-            styles.groupOption,
-            formData.groupId === group.id && styles.groupOptionSelected,
-            { borderColor: group.color }
-          ]}
-          onPress={() => {
-            setFormData({
-              ...formData, 
-              groupId: group.id,
-              participants: group.members
-            });
-          }}
-        >
-          <View style={styles.groupOptionContent}>
-            <View style={[styles.groupIcon, { backgroundColor: group.color + '20' }]}>
-              <Text style={[styles.groupIconText, { color: group.color }]}>👥</Text>
+      {groups && groups.length > 0 ? (
+        groups.map((group) => (
+          <TouchableOpacity
+            key={group.id}
+            style={[
+              styles.groupOption,
+              { 
+                backgroundColor: theme.colors.card,
+                borderColor: formData.groupId === group.id ? theme.colors.primary : theme.colors.border
+              },
+              formData.groupId === group.id && { backgroundColor: theme.colors.primary + '20' }
+            ]}
+            onPress={() => {
+              setFormData({
+                ...formData, 
+                groupId: group.id,
+                participants: group.members || []
+              });
+            }}
+          >
+            <View style={styles.groupOptionContent}>
+              <View style={[styles.groupIcon, { backgroundColor: (group.color || theme.colors.primary) + '20' }]}>
+                <Text style={[styles.groupIconText, { color: group.color || theme.colors.primary }]}>👥</Text>
+              </View>
+              <View style={styles.groupInfo}>
+                <Text style={[styles.groupName, { color: theme.colors.text }]}>{group.name}</Text>
+                <Text style={[styles.groupSubtitle, { color: theme.colors.textSecondary }]}>
+                  {(group.members || []).length} members
+                </Text>
+              </View>
             </View>
-            <View style={styles.groupInfo}>
-              <Text style={styles.groupName}>{group.name}</Text>
-              <Text style={styles.groupSubtitle}>{group.members.length} members</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      ))}
+          </TouchableOpacity>
+        ))
+      ) : (
+        <View style={[styles.noGroupsContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <Text style={[styles.noGroupsText, { color: theme.colors.textSecondary }]}>
+            No groups available. Create a group first to add expenses.
+          </Text>
+        </View>
+      )}
     </View>
   );
 
   const renderStep3 = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>How to Split?</Text>
+      <Text style={[styles.stepTitle, { color: theme.colors.text }]}>How to Split?</Text>
       
       {SplitOptions.map((option) => (
         <TouchableOpacity
           key={option.id}
           style={[
             styles.splitOption,
-            formData.splitType === option.id && styles.splitOptionSelected
+            { 
+              backgroundColor: theme.colors.card,
+              borderColor: formData.splitType === option.id ? theme.colors.primary : theme.colors.border
+            },
+            formData.splitType === option.id && { backgroundColor: theme.colors.primary + '20' }
           ]}
           onPress={() => setFormData({...formData, splitType: option.id})}
         >
           <View style={styles.splitOptionContent}>
-            <Text style={styles.splitOptionName}>{option.name}</Text>
-            <Text style={styles.splitOptionDescription}>{option.description}</Text>
+            <Text style={[styles.splitOptionName, { color: theme.colors.text }]}>{option.name}</Text>
+            <Text style={[styles.splitOptionDescription, { color: theme.colors.textSecondary }]}>{option.description}</Text>
           </View>
         </TouchableOpacity>
       ))}
 
       {formData.splitType === 'custom' && (
-        <View style={styles.customSplitContainer}>
-          <Text style={styles.customSplitTitle}>Custom Amounts</Text>
+        <View style={[styles.customSplitContainer, { backgroundColor: theme.colors.card }]}>
+          <Text style={[styles.customSplitTitle, { color: theme.colors.text }]}>Custom Amounts</Text>
           {formData.participants.map((participantId) => (
             <View key={participantId} style={styles.customSplitRow}>
-              <Text style={styles.participantName}>
+              <Text style={[styles.participantName, { color: theme.colors.text }]}>
                 {participantId === currentUser.id ? 'You' : 'Member'}
               </Text>
-              <View style={styles.customAmountInput}>
-                <Text style={styles.dollarSign}>$</Text>
+              <View style={[styles.customAmountInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <Text style={[styles.dollarSign, { color: theme.colors.textSecondary }]}>$</Text>
                 <TextInput
-                  style={styles.customAmountField}
+                  style={[styles.customAmountField, { color: theme.colors.text }]}
                   placeholder="0.00"
+                  placeholderTextColor={theme.colors.textSecondary}
                   keyboardType="numeric"
                   value={formData.customSplits[participantId]?.toString() || ''}
                   onChangeText={(text) => setFormData({
@@ -301,27 +352,27 @@ const EnhancedExpenseForm = ({
 
   const renderStep4 = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Review & Confirm</Text>
+      <Text style={[styles.stepTitle, { color: theme.colors.text }]}>Review & Confirm</Text>
       
-      <View style={styles.reviewCard}>
-        <Text style={styles.reviewTitle}>{formData.description}</Text>
-        <Text style={styles.reviewAmount}>${formData.amount}</Text>
+      <View style={[styles.reviewCard, { backgroundColor: theme.colors.card }]}>
+        <Text style={[styles.reviewTitle, { color: theme.colors.text }]}>{formData.description}</Text>
+        <Text style={[styles.reviewAmount, { color: theme.colors.primary }]}>${formData.amount}</Text>
         
         <View style={styles.reviewSection}>
-          <Text style={styles.reviewSectionTitle}>Group</Text>
-          <Text style={styles.reviewSectionValue}>{selectedGroup?.name}</Text>
+          <Text style={[styles.reviewSectionTitle, { color: theme.colors.textSecondary }]}>Group</Text>
+          <Text style={[styles.reviewSectionValue, { color: theme.colors.text }]}>{selectedGroup?.name}</Text>
         </View>
 
         <View style={styles.reviewSection}>
-          <Text style={styles.reviewSectionTitle}>Category</Text>
-          <Text style={styles.reviewSectionValue}>
+          <Text style={[styles.reviewSectionTitle, { color: theme.colors.textSecondary }]}>Category</Text>
+          <Text style={[styles.reviewSectionValue, { color: theme.colors.text }]}>
             {ExpenseCategories.find(c => c.id === formData.category)?.name}
           </Text>
         </View>
 
         <View style={styles.reviewSection}>
-          <Text style={styles.reviewSectionTitle}>Split</Text>
-          <Text style={styles.reviewSectionValue}>
+          <Text style={[styles.reviewSectionTitle, { color: theme.colors.textSecondary }]}>Split</Text>
+          <Text style={[styles.reviewSectionValue, { color: theme.colors.text }]}>
             {formData.splitType === 'equal' 
               ? `$${(parseFloat(formData.amount) / formData.participants.length).toFixed(2)} per person`
               : 'Custom amounts'
@@ -386,18 +437,23 @@ const EnhancedExpenseForm = ({
         </ScrollView>
 
         {/* Navigation Buttons */}
-        <View style={styles.navigationContainer}>
+        <View style={[styles.navigationContainer, { backgroundColor: theme.colors.card, borderTopColor: theme.colors.border }]}>
           {currentStep > 1 && (
-            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-              <Text style={styles.backButtonText}>Back</Text>
+            <TouchableOpacity 
+              style={[styles.backButton, { backgroundColor: theme.colors.background }]} 
+              onPress={handleBack}
+            >
+              <Text style={[styles.backButtonText, { color: theme.colors.textSecondary }]}>Back</Text>
             </TouchableOpacity>
           )}
           
           <TouchableOpacity 
             style={[
               styles.nextButton,
-              currentStep === 1 && (!formData.description || !formData.amount) && styles.disabledButton,
-              currentStep === 2 && !formData.groupId && styles.disabledButton
+              { backgroundColor: theme.colors.primary },
+              ((currentStep === 1 && (!formData.description || !formData.amount)) ||
+               (currentStep === 2 && !formData.groupId)) && 
+               { backgroundColor: theme.colors.textSecondary }
             ]}
             onPress={currentStep === totalSteps ? handleSubmit : handleNext}
             disabled={
@@ -422,11 +478,9 @@ const EnhancedExpenseForm = ({
   );
 };
 
-// Styles would be extensive - I'll provide a condensed version
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -434,36 +488,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
   },
   closeButton: {
     fontSize: 24,
-    color: '#6B7280',
   },
   stepIndicator: {
     fontSize: 16,
-    color: '#6B7280',
   },
   progressContainer: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: 'white',
   },
   progressBar: {
     height: 4,
-    backgroundColor: '#E5E7EB',
     borderRadius: 2,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#6366F1',
     borderRadius: 2,
   },
   modalContent: {
@@ -476,7 +522,6 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 24,
     textAlign: 'center',
   },
@@ -486,17 +531,14 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
     marginBottom: 8,
   },
   formInput: {
     borderWidth: 2,
-    borderColor: '#E5E7EB',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    backgroundColor: 'white',
   },
   textArea: {
     height: 80,
@@ -506,13 +548,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
     borderRadius: 8,
-    backgroundColor: 'white',
   },
   dollarSign: {
     fontSize: 16,
-    color: '#6B7280',
     paddingLeft: 12,
   },
   amountInput: {
@@ -528,16 +567,11 @@ const styles = StyleSheet.create({
   },
   categoryOption: {
     borderWidth: 2,
-    borderColor: '#E5E7EB',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: 'white',
     alignItems: 'center',
     minWidth: 80,
-  },
-  categoryOptionSelected: {
-    backgroundColor: '#EEF2FF',
   },
   categoryEmoji: {
     fontSize: 20,
@@ -546,19 +580,25 @@ const styles = StyleSheet.create({
   categoryName: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#374151',
     textAlign: 'center',
   },
   groupOption: {
     borderWidth: 2,
-    borderColor: '#E5E7EB',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    backgroundColor: 'white',
   },
-  groupOptionSelected: {
-    backgroundColor: '#EEF2FF',
+  noGroupsContainer: {
+    padding: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+  },
+  noGroupsText: {
+    fontSize: 16,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   groupOptionContent: {
     flexDirection: 'row',
@@ -581,24 +621,16 @@ const styles = StyleSheet.create({
   groupName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 2,
   },
   groupSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
   },
   splitOption: {
     borderWidth: 2,
-    borderColor: '#E5E7EB',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    backgroundColor: 'white',
-  },
-  splitOptionSelected: {
-    borderColor: '#6366F1',
-    backgroundColor: '#EEF2FF',
   },
   splitOptionContent: {
     alignItems: 'center',
@@ -606,24 +638,20 @@ const styles = StyleSheet.create({
   splitOptionName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
     marginBottom: 4,
   },
   splitOptionDescription: {
     fontSize: 14,
-    color: '#6B7280',
     textAlign: 'center',
   },
   customSplitContainer: {
     marginTop: 16,
     padding: 16,
-    backgroundColor: 'white',
     borderRadius: 12,
   },
   customSplitTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
     marginBottom: 12,
   },
   customSplitRow: {
@@ -634,15 +662,12 @@ const styles = StyleSheet.create({
   },
   participantName: {
     fontSize: 14,
-    color: '#374151',
   },
   customAmountInput: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     borderRadius: 6,
-    backgroundColor: 'white',
     width: 100,
   },
   customAmountField: {
@@ -652,20 +677,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   reviewCard: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 20,
   },
   reviewTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 8,
   },
   reviewAmount: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#6366F1',
     marginBottom: 20,
   },
   reviewSection: {
@@ -674,20 +696,16 @@ const styles = StyleSheet.create({
   reviewSectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
     marginBottom: 4,
   },
   reviewSectionValue: {
     fontSize: 16,
-    color: '#111827',
   },
   navigationContainer: {
     flexDirection: 'row',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
     gap: 12,
   },
   backButton: {
@@ -695,19 +713,16 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
   },
   backButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6B7280',
   },
   nextButton: {
     flex: 2,
     paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: '#6366F1',
   },
   nextButtonText: {
     fontSize: 16,
@@ -715,16 +730,13 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   disabledButton: {
-    backgroundColor: '#9CA3AF',
   },
   receiptScanButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EEF2FF',
     borderRadius: 12,
     padding: 16,
     borderWidth: 2,
-    borderColor: '#6366F1',
     borderStyle: 'dashed',
   },
   receiptScanEmoji: {
@@ -737,14 +749,14 @@ const styles = StyleSheet.create({
   receiptScanText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6366F1',
     marginBottom: 2,
   },
   receiptScanSubtext: {
     fontSize: 14,
-    color: '#6366F1',
     opacity: 0.8,
   },
 });
+
+
 
 export default EnhancedExpenseForm;

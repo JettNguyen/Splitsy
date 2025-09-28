@@ -14,7 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { UserProvider, useUser } from './context/UserContext';
-import { DataProvider, useData } from './context/DataContext';
+import { DataProvider, useData } from './context/ApiDataContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -47,6 +47,7 @@ const SplitsyApp = () => {
   
   const [currentTab, setCurrentTab] = useState('home');
   const [showModal, setShowModal] = useState(null);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
   
   // Unified function to close all modals and prevent stacking
   const closeAllModals = () => {
@@ -294,11 +295,24 @@ const SplitsyApp = () => {
         </View>
       ) : (
         userGroups.map((group) => {
+          // Safety check for group and group.id
+          if (!group || !group.id) {
+            console.error('Invalid group in userGroups:', group);
+            return null;
+          }
+          
           const groupTransactions = userTransactions.filter(t => t.groupId === group.id);
           const totalAmount = groupTransactions.reduce((sum, t) => sum + t.amount, 0);
           
           return (
-            <View key={group.id} style={[styles.groupCard, { backgroundColor: theme.colors.card }]}>
+            <TouchableOpacity 
+              key={group.id} 
+              style={[styles.groupCard, { backgroundColor: theme.colors.card }]}
+              onPress={() => {
+                setSelectedGroupId(group.id);
+                setShowModal('groupManagement');
+              }}
+            >
               <View style={styles.groupHeader}>
                 <View style={styles.groupLeft}>
                   <View style={[styles.groupIcon, { backgroundColor: group.color + '20' }]}>
@@ -331,7 +345,7 @@ const SplitsyApp = () => {
                   </View>
                 )}
               </View>
-            </View>
+            </TouchableOpacity>
           );
         })
       )}
@@ -596,7 +610,7 @@ const SplitsyApp = () => {
           { id: 'home', emoji: '🏠', label: 'Home' },
           { id: 'groups', emoji: '👥', label: 'Groups' },
           { id: 'activity', emoji: '🔔', label: 'Activity' },
-          { id: 'profile', emoji: '⚙️', label: 'Profile' }
+          { id: 'profile', emoji: '⚙️', label: 'Settings' }
         ].map((tab) => {
           const unreadCount = tab.id === 'activity' ? getUnreadCount() : 0;
           
@@ -645,30 +659,47 @@ const SplitsyApp = () => {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Create Group</Text>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
+          <View style={[styles.modalHeader, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Create Group</Text>
             <TouchableOpacity onPress={closeAllModals}>
-              <Text style={styles.closeButton}>✕</Text>
+              <Text style={[styles.closeButton, { color: theme.colors.textSecondary }]}>✕</Text>
             </TouchableOpacity>
           </View>
           
           <ScrollView style={styles.modalContent}>
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Group Name</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Group Name</Text>
               <TextInput
-                style={styles.formInput}
+                style={[
+                  styles.formInput, 
+                  { 
+                    backgroundColor: theme.colors.card, 
+                    borderColor: theme.colors.border, 
+                    color: theme.colors.text 
+                  }
+                ]}
                 placeholder="e.g., House, Trip to Hawaii, Dinner"
+                placeholderTextColor={theme.colors.textSecondary}
                 value={groupForm.name}
                 onChangeText={(text) => setGroupForm({...groupForm, name: text})}
               />
             </View>
             
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Description (Optional)</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Description (Optional)</Text>
               <TextInput
-                style={[styles.formInput, styles.textArea]}
+                style={[
+                  styles.formInput, 
+                  styles.textArea, 
+                  { 
+                    backgroundColor: theme.colors.card, 
+                    borderColor: theme.colors.border, 
+                    color: theme.colors.text 
+                  }
+                ]}
                 placeholder="What's this group for?"
+                placeholderTextColor={theme.colors.textSecondary}
                 value={groupForm.description}
                 onChangeText={(text) => setGroupForm({...groupForm, description: text})}
                 multiline
@@ -676,7 +707,7 @@ const SplitsyApp = () => {
               />
             </View>
             
-            <View style={styles.infoBox}>
+            <View style={[styles.infoBox, { backgroundColor: theme.colors.primary + '20' }]}>
               <Text style={[styles.infoText, { color: theme.colors.primary }]}>
                 💡 You can add members to this group after creating it by sharing your group code.
               </Text>
@@ -760,52 +791,29 @@ const SplitsyApp = () => {
       </Modal>
 
       {/* Payment Methods Screen */}
-      <Modal
+      <PaymentMethodsScreen 
         visible={showModal === 'paymentMethods'}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <PaymentMethodsScreen 
-          visible={showModal === 'paymentMethods'}
-          onClose={closeAllModals} 
-        />
-      </Modal>
+        onClose={closeAllModals} 
+      />
 
       {/* Notifications Screen */}
-      <Modal
+      <NotificationsScreen 
         visible={showModal === 'notifications'}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <NotificationsScreen 
-          visible={showModal === 'notifications'}
-          onClose={closeAllModals} 
-        />
-      </Modal>
+        onClose={closeAllModals} 
+      />
 
       {/* Expense Reports Screen */}
-      <Modal
+      <ExpenseReportsScreen 
         visible={showModal === 'expenseReports'}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <ExpenseReportsScreen 
-          visible={showModal === 'expenseReports'}
-          onClose={closeAllModals} 
-        />
-      </Modal>
+        onClose={closeAllModals} 
+      />
 
       {/* Group Management Screen */}
-      <Modal
+      <GroupManagementScreen 
         visible={showModal === 'groupManagement'}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <GroupManagementScreen 
-          visible={showModal === 'groupManagement'}
-          onClose={closeAllModals} 
-        />
-      </Modal>
+        onClose={closeAllModals}
+        groupId={selectedGroupId}
+      />
     </View>
   );
 };
@@ -1403,7 +1411,6 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1411,18 +1418,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
   },
   closeButton: {
     fontSize: 24,
-    color: '#6B7280',
   },
   modalContent: {
     flex: 1,
@@ -1435,17 +1438,14 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
     marginBottom: 8,
   },
   formInput: {
     borderWidth: 2,
-    borderColor: '#E5E7EB',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    backgroundColor: 'white',
   },
   textArea: {
     height: 80,
@@ -1497,7 +1497,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   infoBox: {
-    backgroundColor: '#EEF2FF',
     borderRadius: 8,
     padding: 16,
     marginBottom: 16,

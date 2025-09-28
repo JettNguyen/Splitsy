@@ -9,7 +9,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-import { useData } from '../context/DataContext';
+import { useData } from '../context/ApiDataContext';
 import { useUser } from '../context/UserContext';
 
 const ExpenseReportsScreen = ({ visible, onClose }) => {
@@ -159,15 +159,27 @@ const ExpenseReportsScreen = ({ visible, onClose }) => {
   );
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal 
+      visible={visible} 
+      animationType="slide" 
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        {/* Drag Indicator */}
+        <View style={styles.dragIndicatorContainer}>
+          <View style={[styles.dragIndicator, { backgroundColor: theme.colors.textTertiary }]} />
+        </View>
+        
         {/* Header */}
         <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary }]}>Close</Text>
+            <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary, opacity: 0.7 }]}>Cancel</Text>
           </TouchableOpacity>
           <Text style={[styles.title, { color: theme.colors.text }]}>Expense Reports</Text>
-          <View style={{ width: 60 }} />
+          <View style={styles.closeButton}>
+            <Text style={[styles.closeButtonText, { color: 'transparent' }]}>Cancel</Text>
+          </View>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -303,6 +315,16 @@ const ExpenseReportsScreen = ({ visible, onClose }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  dragIndicatorContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  dragIndicator: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    opacity: 0.5,
   },
   header: {
     flexDirection: 'row',

@@ -36,22 +36,46 @@ export const UserProvider = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Add timeout promise
+      // Check for JWT token (new API authentication)
+      const token = await AsyncStorage.getItem('authToken');
+      if (token) {
+        try {
+          // Import ApiService dynamically to avoid circular dependencies
+          const { default: apiService } = await import('../services/apiService');
+          await apiService.init();
+          
+          // Try to get user profile from API
+          const profile = await apiService.getUserProfile();
+          if (profile.success) {
+            setCurrentUser(profile.user);
+            setIsAuthenticated(true);
+            setIsLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.log('API authentication failed, falling back to local storage');
+          // Clear invalid token
+          await AsyncStorage.removeItem('authToken');
+        }
+      }
+      
+      // Fallback to old AsyncStorage system for backwards compatibility
       const timeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('AsyncStorage timeout')), 3000)
       );
       
-      // Load all users with timeout
       const storedUsers = await Promise.race([
         AsyncStorage.getItem('users'),
         timeout
       ]);
       
       if (storedUsers) {
-        setUsers(JSON.parse(storedUsers));
+        const parsedUsers = JSON.parse(storedUsers);
+        // Filter out any invalid users without email
+        const validUsers = parsedUsers.filter(user => user && user.email && typeof user.email === 'string');
+        setUsers(validUsers);
       }
 
-      // Load current user with timeout
       const currentUserId = await Promise.race([
         AsyncStorage.getItem('currentUserId'),
         timeout
@@ -67,7 +91,6 @@ export const UserProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      // Continue anyway - app should work without stored data
     } finally {
       setIsLoading(false);
     }
@@ -75,8 +98,10 @@ export const UserProvider = ({ children }) => {
 
   const saveUsers = async (newUsers) => {
     try {
-      await AsyncStorage.setItem('users', JSON.stringify(newUsers));
-      setUsers(newUsers);
+      // Filter out any invalid users before saving
+      const validUsers = newUsers.filter(user => user && user.email && typeof user.email === 'string');
+      await AsyncStorage.setItem('users', JSON.stringify(validUsers));
+      setUsers(validUsers);
     } catch (error) {
       console.error('Error saving users:', error);
     }
@@ -88,23 +113,30 @@ export const UserProvider = ({ children }) => {
 
   const registerUser = async (userData) => {
     try {
-      const newUser = {
-        id: generateUserId(),
-        ...userData,
-        createdAt: new Date().toISOString(),
-        avatar: userData.name ? userData.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U',
-        paymentMethods: []
-      };
-
-      const updatedUsers = [...users, newUser];
-      await saveUsers(updatedUsers);
+      // Use API service for registration
+      const { default: apiService } = await import('../services/apiService');
+      await apiService.init();
       
-      // Auto-login the new user
-      await AsyncStorage.setItem('currentUserId', newUser.id);
-      setCurrentUser(newUser);
-      setIsAuthenticated(true);
-
-      return { success: true, user: newUser };
+      const result = await apiService.register(userData.name, userData.email, userData.password);
+      console.log('Registration result:', result);
+      
+      if (result.success) {
+        console.log('Setting current user:', result.user);
+        // Set the user and authentication state
+        setCurrentUser(result.user);
+        setIsAuthenticated(true);
+        
+        // For backwards compatibility, also save to local storage
+        const newUser = {
+          ...result.user,
+          avatar: userData.name ? userData.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'
+        };
+        const updatedUsers = [...users, newUser];
+        await saveUsers(updatedUsers);
+        await AsyncStorage.setItem('currentUserId', result.user.id);
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error registering user:', error);
       return { success: false, error: error.message };
@@ -113,7 +145,56 @@ export const UserProvider = ({ children }) => {
 
   const loginUser = async (email, password) => {
     try {
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      console.log('Login attempt with email:', email);
+      
+      // Validate input parameters
+      if (!email || typeof email !== 'string') {
+        return { success: false, error: 'Please provide a valid email address' };
+      }
+      
+      if (!password || typeof password !== 'string') {
+        return { success: false, error: 'Please provide a valid password' };
+      }
+      
+      // Use API service for login
+      const { default: apiService } = await import('../services/apiService');
+      await apiService.init();
+      
+      const result = await apiService.login(email, password);
+      console.log('Login result:', result);
+      
+      if (result.success) {
+        // Set the user and authentication state
+        setCurrentUser(result.user);
+        setIsAuthenticated(true);
+        
+        // For backwards compatibility, also save to local storage
+        const newUser = {
+          ...result.user,
+          avatar: result.user.name ? result.user.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'
+        };
+        const existingUserIndex = users.findIndex(u => u.email && email && u.email.toLowerCase() === email.toLowerCase());
+        let updatedUsers;
+        if (existingUserIndex >= 0) {
+          updatedUsers = [...users];
+          updatedUsers[existingUserIndex] = newUser;
+        } else {
+          updatedUsers = [...users, newUser];
+        }
+        await saveUsers(updatedUsers);
+        await AsyncStorage.setItem('currentUserId', result.user.id);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error logging in user:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const oldLoginUser = async (email, password) => {
+    try {
+      const user = users.find(u => u.email && email && u.email.toLowerCase() === email.toLowerCase());
       if (!user) {
         return { success: false, error: 'User not found' };
       }
@@ -135,7 +216,13 @@ export const UserProvider = ({ children }) => {
 
   const logoutUser = async () => {
     try {
+      // Clear API token
+      const { default: apiService } = await import('../services/apiService');
+      apiService.setAuthToken(null);
+      
+      // Clear local storage
       await AsyncStorage.removeItem('currentUserId');
+      await AsyncStorage.removeItem('authToken');
       setCurrentUser(null);
       setIsAuthenticated(false);
     } catch (error) {
@@ -163,7 +250,7 @@ export const UserProvider = ({ children }) => {
   };
 
   const findUserByEmail = (email) => {
-    return users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    return users.find(u => u.email && email && u.email.toLowerCase() === email.toLowerCase());
   };
 
   const findUserById = (id) => {

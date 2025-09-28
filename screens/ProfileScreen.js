@@ -12,7 +12,7 @@ import {
   Switch
 } from 'react-native';
 import { useUser } from '../context/UserContext';
-import { useData } from '../context/DataContext';
+import { useData } from '../context/ApiDataContext';
 import { useTheme } from '../context/ThemeContext';
 
 const ProfileScreen = ({ 
@@ -171,7 +171,13 @@ const ProfileScreen = ({
             icon="👥"
             title="Manage Groups"
             subtitle="View and edit your groups"
-            onPress={onNavigateToGroupManagement}
+            onPress={() => {
+              Alert.alert(
+                'Manage Groups',
+                'You can manage your groups from the Groups tab. Tap on any group to edit it.',
+                [{ text: 'OK' }]
+              );
+            }}
           />
           <MenuItem
             icon="📊"

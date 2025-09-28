@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,66 @@ import {
   Modal,
   SafeAreaView,
   Switch,
+  Platform,
+  Animated,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 
+// Move SettingRow outside to prevent recreation on every render
+const SettingRow = memo(({ title, subtitle, value, onToggle, theme }) => {
+  const settingRowStyle = {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.border
+  };
+
+  const settingTextStyle = {
+    flex: 1,
+    marginRight: 16
+  };
+
+  const settingTitleStyle = {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 2,
+    color: theme.colors.text
+  };
+
+  const settingSubtitleStyle = {
+    fontSize: 13,
+    color: theme.colors.textSecondary
+  };
+
+  return (
+    <View style={settingRowStyle}>
+      <View style={settingTextStyle}>
+        <Text style={settingTitleStyle}>{title}</Text>
+        <Text style={settingSubtitleStyle}>{subtitle}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onToggle}
+        ios_backgroundColor={theme.colors.border}
+        trackColor={{ 
+          false: theme.colors.border, 
+          true: theme.colors.accent 
+        }}
+        thumbColor={Platform.OS === 'ios' ? undefined : (value ? theme.colors.card : theme.colors.textTertiary)}
+      />
+    </View>
+  );
+});
+
 const NotificationsScreen = ({ visible, onClose }) => {
   const { theme } = useTheme();
-  const { notifications, markAsRead, markAllAsRead, clearAll } = useNotifications();
+  const { notifications, markAsRead } = useNotifications();
   const [settings, setSettings] = useState({
     pushNotifications: true,
     expenseAlerts: true,
@@ -23,196 +76,156 @@ const NotificationsScreen = ({ visible, onClose }) => {
     settleUpReminders: true,
     emailNotifications: false,
   });
+  
+  // Animation values for smooth drag gestures
+  const translateY = useRef(new Animated.Value(0)).current;
+  const { height } = Dimensions.get('window');
+  
+  // Enhanced pan responder with immediate response
+  const panResponder = PanResponder.create({
+    onMoveShouldSetPanResponder: (evt, gestureState) => {
+      return Math.abs(gestureState.dy) > 3 && gestureState.dy > 0;
+    },
+    onPanResponderGrant: () => {
+      translateY.setOffset(translateY._value);
+    },
+    onPanResponderMove: (evt, gestureState) => {
+      if (gestureState.dy > 0) {
+        translateY.setValue(gestureState.dy * 0.8); // Damping for smoother feel
+      }
+    },
+    onPanResponderRelease: (evt, gestureState) => {
+      translateY.flattenOffset();
+      if (gestureState.dy > height * 0.2 || gestureState.vy > 1.2) {
+        Animated.timing(translateY, {
+          toValue: height,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => onClose());
+      } else {
+        Animated.spring(translateY, {
+          toValue: 0,
+          damping: 15,
+          stiffness: 150,
+          useNativeDriver: true,
+        }).start();
+      }
+    },
+  });
 
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffInHours = (now - date) / (1000 * 60 * 60);
-    
-    if (diffInHours < 1) {
-      return 'Just now';
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h ago`;
-    } else {
-      return `${Math.floor(diffInHours / 24)}d ago`;
-    }
-  };
+  // Create stable callback functions to prevent Switch recreation
+  const togglePushNotifications = useCallback((value) => {
+    setSettings(prev => ({ ...prev, pushNotifications: value }));
+  }, []);
 
-  const getNotificationIcon = (type) => {
-    switch (type) {
-      case 'expense': return '💰';
-      case 'payment': return '💸';
-      case 'settle': return '✅';
-      case 'reminder': return '⏰';
-      case 'group': return '👥';
-      default: return '🔔';
-    }
-  };
+  const toggleExpenseAlerts = useCallback((value) => {
+    setSettings(prev => ({ ...prev, expenseAlerts: value }));
+  }, []);
 
-  const getNotificationColor = (type) => {
-    switch (type) {
-      case 'expense': return theme.colors.info;
-      case 'payment': return theme.colors.success;
-      case 'settle': return theme.colors.accent;
-      case 'reminder': return theme.colors.warning;
-      case 'group': return theme.colors.primary;
-      default: return theme.colors.textSecondary;
-    }
-  };
+  const togglePaymentReminders = useCallback((value) => {
+    setSettings(prev => ({ ...prev, paymentReminders: value }));
+  }, []);
 
-  const NotificationItem = ({ notification }) => (
-    <TouchableOpacity
-      style={[
-        styles.notificationItem,
-        { 
-          backgroundColor: notification.read ? theme.colors.surface : theme.colors.card,
-          borderColor: theme.colors.border,
-          borderLeftColor: getNotificationColor(notification.type),
-        }
-      ]}
-      onPress={() => markAsRead(notification.id)}
-    >
-      <View style={[styles.notificationIcon, { backgroundColor: getNotificationColor(notification.type) }]}>
-        <Text style={styles.notificationIconText}>
-          {getNotificationIcon(notification.type)}
-        </Text>
-      </View>
-      <View style={styles.notificationContent}>
-        <Text style={[styles.notificationTitle, { 
-          color: theme.colors.text,
-          fontWeight: notification.read ? '500' : '600'
-        }]}>
-          {notification.title}
-        </Text>
-        <Text style={[styles.notificationMessage, { color: theme.colors.textSecondary }]}>
-          {notification.message}
-        </Text>
-        <Text style={[styles.notificationTime, { color: theme.colors.textTertiary }]}>
-          {formatTime(notification.timestamp)}
-        </Text>
-      </View>
-      {!notification.read && (
-        <View style={[styles.unreadIndicator, { backgroundColor: theme.colors.accent }]} />
-      )}
-    </TouchableOpacity>
-  );
+  const toggleGroupActivity = useCallback((value) => {
+    setSettings(prev => ({ ...prev, groupActivity: value }));
+  }, []);
 
-  const SettingRow = ({ title, subtitle, value, onToggle }) => (
-    <View style={[styles.settingRow, { borderBottomColor: theme.colors.border }]}>
-      <View style={styles.settingText}>
-        <Text style={[styles.settingTitle, { color: theme.colors.text }]}>{title}</Text>
-        <Text style={[styles.settingSubtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onToggle}
-        trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
-        thumbColor={theme.colors.card}
-      />
-    </View>
-  );
+  const toggleSettleUpReminders = useCallback((value) => {
+    setSettings(prev => ({ ...prev, settleUpReminders: value }));
+  }, []);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const toggleEmailNotifications = useCallback((value) => {
+    setSettings(prev => ({ ...prev, emailNotifications: value }));
+  }, []);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <Modal 
+      visible={visible} 
+      animationType="slide" 
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <Animated.View 
+        style={[
+          styles.container, 
+          { 
+            backgroundColor: theme.colors.background,
+            transform: [{ translateY }]
+          }
+        ]}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          {/* Enhanced Drag Indicator */}
+          <View style={styles.dragIndicatorContainer} {...panResponder.panHandlers}>
+            <View style={[styles.dragIndicator, { backgroundColor: theme.colors.textTertiary }]} />
+          </View>
+        
         {/* Header */}
         <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary }]}>Close</Text>
+            <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary, opacity: 0.7 }]}>Cancel</Text>
           </TouchableOpacity>
           <Text style={[styles.title, { color: theme.colors.text }]}>Notifications</Text>
-          {unreadCount > 0 && (
-            <TouchableOpacity onPress={markAllAsRead} style={styles.markAllButton}>
-              <Text style={[styles.markAllButtonText, { color: theme.colors.accent }]}>Mark All Read</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.markAllButton} />
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Stats */}
-          <View style={[styles.statsSection, { backgroundColor: theme.colors.card }]}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: theme.colors.accent }]}>{unreadCount}</Text>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Unread</Text>
-            </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: theme.colors.text }]}>{notifications.length}</Text>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Total</Text>
-            </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
-            <TouchableOpacity style={styles.statItem} onPress={clearAll}>
-              <Text style={[styles.clearAllText, { color: theme.colors.error }]}>Clear All</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Notifications List */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Activity</Text>
-            
-            {notifications.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyIcon, { color: theme.colors.textTertiary }]}>🔔</Text>
-                <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                  No notifications yet
-                </Text>
-                <Text style={[styles.emptySubtext, { color: theme.colors.textTertiary }]}>
-                  You'll see expense updates and payment reminders here
-                </Text>
-              </View>
-            ) : (
-              notifications.map((notification) => (
-                <NotificationItem key={notification.id} notification={notification} />
-              ))
-            )}
-          </View>
-
-          {/* Settings */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Notification Settings</Text>
             <View style={[styles.settingsCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
               <SettingRow
+                key="pushNotifications"
                 title="Push Notifications"
                 subtitle="Receive notifications on this device"
                 value={settings.pushNotifications}
-                onToggle={(value) => setSettings({ ...settings, pushNotifications: value })}
+                onToggle={togglePushNotifications}
+                theme={theme}
               />
               <SettingRow
+                key="expenseAlerts"
                 title="Expense Alerts"
                 subtitle="When expenses are added to your groups"
                 value={settings.expenseAlerts}
-                onToggle={(value) => setSettings({ ...settings, expenseAlerts: value })}
+                onToggle={toggleExpenseAlerts}
+                theme={theme}
               />
               <SettingRow
+                key="paymentReminders"
                 title="Payment Reminders"
                 subtitle="Reminders to settle up with friends"
                 value={settings.paymentReminders}
-                onToggle={(value) => setSettings({ ...settings, paymentReminders: value })}
+                onToggle={togglePaymentReminders}
+                theme={theme}
               />
               <SettingRow
+                key="groupActivity"
                 title="Group Activity"
                 subtitle="Updates about group changes and new members"
                 value={settings.groupActivity}
-                onToggle={(value) => setSettings({ ...settings, groupActivity: value })}
+                onToggle={toggleGroupActivity}
+                theme={theme}
               />
               <SettingRow
+                key="settleUpReminders"
                 title="Settle Up Reminders"
                 subtitle="Weekly reminders to clear outstanding balances"
                 value={settings.settleUpReminders}
-                onToggle={(value) => setSettings({ ...settings, settleUpReminders: value })}
+                onToggle={toggleSettleUpReminders}
+                theme={theme}
               />
               <SettingRow
+                key="emailNotifications"
                 title="Email Notifications"
                 subtitle="Receive notifications via email"
                 value={settings.emailNotifications}
-                onToggle={(value) => setSettings({ ...settings, emailNotifications: value })}
+                onToggle={toggleEmailNotifications}
+                theme={theme}
               />
             </View>
           </View>
-        </ScrollView>
-      </SafeAreaView>
+          </ScrollView>
+        </SafeAreaView>
+      </Animated.View>
     </Modal>
   );
 };
@@ -221,7 +234,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  dragIndicatorContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  dragIndicator: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    opacity: 0.5,
+  },
   header: {
+    position: 'relative',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -231,16 +255,23 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 8,
+    zIndex: 1,
   },
   closeButtonText: {
     fontSize: 16,
   },
   title: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
     fontSize: 18,
     fontWeight: '600',
+    zIndex: 0,
   },
   markAllButton: {
     padding: 8,
+    zIndex: 1,
   },
   markAllButtonText: {
     fontSize: 14,
@@ -250,34 +281,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  statsSection: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  clearAllText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  statDivider: {
-    width: 1,
-    height: '100%',
-    marginHorizontal: 16,
-  },
   section: {
     marginBottom: 24,
   },
@@ -285,65 +288,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
-  },
-  notificationItem: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderLeftWidth: 4,
-    marginBottom: 8,
-    alignItems: 'flex-start',
-  },
-  notificationIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  notificationIconText: {
-    fontSize: 16,
-  },
-  notificationContent: {
-    flex: 1,
-  },
-  notificationTitle: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  notificationMessage: {
-    fontSize: 13,
-    marginBottom: 4,
-    lineHeight: 18,
-  },
-  notificationTime: {
-    fontSize: 11,
-  },
-  unreadIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginLeft: 8,
-    marginTop: 4,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    textAlign: 'center',
   },
   settingsCard: {
     borderRadius: 12,
@@ -367,6 +311,9 @@ const styles = StyleSheet.create({
   },
   settingSubtitle: {
     fontSize: 13,
+  },
+  safeArea: {
+    flex: 1,
   },
 });
 

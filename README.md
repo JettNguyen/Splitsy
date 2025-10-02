@@ -1,4 +1,4 @@
-# Splitsy 💰
+# Splitsy
 **Split expenses effortlessly with friends, family, and roommates**
 
 A React Native app for tracking shared expenses with receipt scanning and automated bill splitting.
@@ -8,14 +8,14 @@ A React Native app for tracking shared expenses with receipt scanning and automa
 - **Cross-Platform**: iOS & Android support
 - **Dark/Light Mode**: Theme switching
 - **Receipt Scanning**: OCR-powered data extraction
-- 👥 **Group Management**: Create and manage expense groups
+- **Group Management**: Create and manage expense groups
 - **Smart Splitting**: Automatic split calculations
 - **Balance Tracking**: Real-time balance summaries
 
 ## Quick Start
 
 ### Prerequisites
-- **Node.js** 18.0+ ([Download](https://nodejs.org/))
+- **Node.js** 18.0+
 - **Expo Go** app on your phone
 
 ### Setup
@@ -45,15 +45,6 @@ Scan the QR code with Expo Go and you're ready!
 - **Icons**: Expo Vector Icons (Ionicons)
 
 ## Development
-
-### Running the App
-```bash
-# Frontend (default port: 19006)
-npx expo start
-
-# Backend (port: 3000)
-cd backend && npm start
-```
 
 ### Available Scripts
 - `npm start` - Start Expo development server

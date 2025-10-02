@@ -16,6 +16,7 @@ import {
   PanResponder,
   Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
 const PaymentMethodsScreen = ({ visible, onClose }) => {
@@ -26,11 +27,9 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
   const [newMethod, setNewMethod] = useState({ type: 'Venmo', handle: '' });
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   
-  // Animation values for smooth drag gestures
   const translateY = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
   
-  // Enhanced pan responder for immediate drag response
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (evt, gestureState) => {
       return Math.abs(gestureState.dy) > 3 && gestureState.dy > 0 && !keyboardVisible;
@@ -62,14 +61,12 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
     },
   });
 
-  // Reset to valid type when modal opens or payment methods change
   useEffect(() => {
     if (showAddModal) {
       ensureValidSelectedType();
     }
   }, [showAddModal, paymentMethods]);
 
-  // Keyboard visibility listeners
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
       setKeyboardVisible(true);
@@ -87,10 +84,10 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
   const getMethodIcon = (type) => {
     switch (type) {
       case 'Venmo': return '💙';
-      case 'PayPal': return '💰';
+      case 'PayPal': return 'P';
       case 'CashApp': return '💵';
-      case 'Zelle': return '⚡';
-      default: return '💳';
+      case 'Zelle': return 'Z';
+      default: return '$';
     }
   };
 
@@ -146,7 +143,6 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
     
     let processedHandle = newMethod.handle.trim();
     
-    // Clean up CashApp handle (remove $ if user added it)
     if (newMethod.type === 'CashApp' && processedHandle.startsWith('$')) {
       processedHandle = processedHandle.substring(1);
     }
@@ -194,7 +190,7 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
         onPress={() => deletePaymentMethod(method.id)}
         style={styles.deleteButton}
       >
-        <Text style={[styles.deleteButtonText, { color: theme.colors.error }]}>×</Text>
+        <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
       </TouchableOpacity>
     </View>
   );
@@ -222,12 +218,12 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
         >
           <View style={[styles.backgroundExtension, { backgroundColor: theme.colors.background }]} />
           <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            {/* Enhanced Drag Indicator */}
+            {/*drag indicator*/}
             <View style={styles.dragIndicatorContainer} {...panResponder.panHandlers}>
               <View style={[styles.dragIndicator, { backgroundColor: theme.colors.textTertiary }]} />
             </View>
           
-          {/* Header */}
+          {/*header*/}
           <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary, opacity: 0.7 }]}>Cancel</Text>
@@ -250,7 +246,7 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={[
               styles.scrollContent,
-              { paddingBottom: (!showAddModal && !keyboardVisible) ? 16 : 80 }
+              { paddingBottom: (!showAddModal && !keyboardVisible) ? 15 : 80 }
             ]}
           >
             {paymentMethods.map((method) => (
@@ -280,13 +276,13 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
             )}
           </ScrollView>
 
-          {/* Add Payment Method Form */}
+          {/*add payment method form*/}
           {showAddModal && getAvailablePaymentTypes().length > 0 && (
             <View style={[styles.addForm, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
               <View style={styles.addFormHeader}>
                 <Text style={[styles.addFormTitle, { color: theme.colors.text }]}>Add New Payment Method</Text>
                 <TouchableOpacity onPress={() => setShowAddModal(false)} style={styles.closeFormButton}>
-                  <Text style={[styles.closeFormButtonText, { color: theme.colors.textSecondary }]}>✕</Text>
+                  <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
               </View>
               
@@ -328,7 +324,7 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
                     backgroundColor: theme.colors.surface, 
                     color: theme.colors.text, 
                     borderColor: theme.colors.border,
-                    paddingLeft: getInputSymbol(newMethod.type) !== '' ? 8 : 12
+                    paddingLeft: getInputSymbol(newMethod.type) !== '' ? 10 : 10
                   }]}
                   placeholder={getPlaceholderText(newMethod.type)}
                   placeholderTextColor={theme.colors.textTertiary}
@@ -348,7 +344,7 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
             </View>
           )}
           
-          {/* Done Button - Hidden when adding new method or keyboard is visible */}
+          {/*done button*/}
           {!showAddModal && !keyboardVisible && (
             <View style={[styles.doneButtonContainer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
               <TouchableOpacity 
@@ -372,13 +368,13 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: -200, // Extend below the visible area to cover keyboard area
+    bottom: -200,
     zIndex: -1,
   },
   container: {
     flex: 1,
     ...(Platform.OS === 'ios' && {
-      paddingBottom: 0, // Remove any bottom padding on iOS
+      paddingBottom: 0,
     }),
   },
   dragIndicatorContainer: {
@@ -393,7 +389,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    // paddingBottom is now dynamic based on Done button visibility
   },
   header: {
     flexDirection: 'row',
@@ -415,8 +410,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   addButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
     borderRadius: 20,
   },
   addButtonText: {
@@ -432,8 +427,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    marginVertical: 6,
+    padding: 15,
+    marginVertical: 5,
     borderRadius: 12,
     borderWidth: 1,
   },
@@ -444,7 +439,7 @@ const styles = StyleSheet.create({
   },
   methodIcon: {
     fontSize: 24,
-    marginRight: 12,
+    marginRight: 10,
   },
   methodDetails: {
     flex: 1,
@@ -452,7 +447,7 @@ const styles = StyleSheet.create({
   methodType: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: 5,
   },
   methodHandle: {
     fontSize: 14,
@@ -463,10 +458,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  deleteButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
+
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -475,12 +467,12 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    marginBottom: 24,
+    marginBottom: 25,
     textAlign: 'center',
   },
   emptyButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 25,
     borderRadius: 8,
   },
   emptyButtonText: {
@@ -502,9 +494,9 @@ const styles = StyleSheet.create({
   doneButtonContainer: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16, // Account for home indicator
+    paddingBottom: Platform.OS === 'ios' ? 35 : 15,
     borderTopWidth: 1,
-    marginTop: 'auto', // Push to bottom
+    marginTop: 'auto',
   },
   doneButton: {
     paddingVertical: 16,
@@ -518,9 +510,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   addForm: {
-    margin: 16,
+    margin: 15,
     borderRadius: 12,
-    padding: 16,
+    padding: 15,
     borderWidth: 1,
     marginBottom: Platform.OS === 'ios' ? 40 : 24,
   },
@@ -540,10 +532,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  closeFormButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',

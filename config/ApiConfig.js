@@ -12,7 +12,7 @@ export const API_CONFIG = {
   MAX_IMAGE_SIZE: 1000, // Max width/height for OCR processing
   IMAGE_QUALITY: 0.9, // Image compression quality (0.1 - 1.0)
   
-  // Fallback Google Vision API (optional - for enhanced accuracy)
+  // Fallback Google Vision API (optional)
   GOOGLE_VISION_API_KEY: 'YOUR_GOOGLE_VISION_API_KEY',
   GOOGLE_VISION_URL: 'https://vision.googleapis.com/v1/images:annotate',
   USE_GOOGLE_VISION: false, // Set to true if you have a Google API key
@@ -23,8 +23,7 @@ export const API_CONFIG = {
 1. Go to Google Cloud Console (https://console.cloud.google.com/)
 2. Create a new project or select existing one
 3. Enable the Vision API
-4. Go to "Credentials" and create an API key
-5. Restrict the API key to Vision API for security
-6. Replace 'YOUR_GOOGLE_VISION_API_KEY' above with your key
-7. Set OCR_ENABLED to true
+4. Create credentials (API key)
+5. Copy the API key and replace 'YOUR_GOOGLE_VISION_API_KEY' above
+6. Set USE_GOOGLE_VISION to true
 */

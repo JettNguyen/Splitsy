@@ -4,14 +4,13 @@
     "slug": "splitsy-expense-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "description": "Split expenses effortlessly with receipt scanning and group management",
     "splash": {
-      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#6366F1"
+      "backgroundColor": "#7c3aed"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -22,8 +21,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#6366F1"
+        "backgroundColor": "#7c3aed"
       },
       "package": "com.jettnguyen.splitsy",
       "permissions": [

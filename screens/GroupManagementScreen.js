@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,7 @@ import {
   TextInput,
   Alert,
   SafeAreaView,
-  Animated,
-  PanResponder,
-  Dimensions,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/ApiDataContext';
 import { useUser } from '../context/UserContext';
@@ -32,166 +28,46 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
   const [groupName, setGroupName] = useState(group?.name || '');
   const [groupDescription, setGroupDescription] = useState(group?.description || '');
   const [showAddMember, setShowAddMember] = useState(false);
-  const [showGroupStats, setShowGroupStats] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  
-  // Animation values
-  const translateY = useRef(new Animated.Value(0)).current;
-  const { height } = Dimensions.get('window');
-  
-  // Pan responder for smooth drag gestures
-  const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (evt, gestureState) => {
-      return Math.abs(gestureState.dy) > 5 && gestureState.dy > 0;
-    },
-    onPanResponderMove: (evt, gestureState) => {
-      if (gestureState.dy > 0) {
-        translateY.setValue(gestureState.dy);
-      }
-    },
-    onPanResponderRelease: (evt, gestureState) => {
-      if (gestureState.dy > height * 0.25 || gestureState.vy > 1.5) {
-        Animated.timing(translateY, {
-          toValue: height,
-          duration: 250,
-          useNativeDriver: true,
-        }).start(() => onClose());
-      } else {
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
-      }
-    },
-  });
+  const [newMemberEmail, setNewMemberEmail] = useState('');
 
   if (!group) {
     return null;
   }
-  
-  // Enhanced Settings Modal Component
-  const GroupSettingsModal = () => (
-    <Modal 
-      visible={showSettingsModal}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => setShowSettingsModal(false)}
-    >
-      <View style={styles.settingsOverlay}>
-        <View style={[styles.settingsModal, { backgroundColor: theme.colors.card }]}>
-          <View style={[styles.settingsHeader, { borderBottomColor: theme.colors.border }]}>
-            <Text style={[styles.settingsTitle, { color: theme.colors.text }]}>Group Settings</Text>
-            <TouchableOpacity 
-              onPress={() => setShowSettingsModal(false)}
-              style={styles.settingsCloseButton}
-            >
-              <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.settingsContent}>
-            <TouchableOpacity 
-              style={[styles.settingsOption, { borderBottomColor: theme.colors.border }]}
-              onPress={() => {
-                setShowSettingsModal(false);
-                setEditMode(true);
-              }}
-            >
-              <Ionicons name="pencil" size={20} color={theme.colors.accent} style={styles.settingsIcon} />
-              <View style={styles.settingsOptionText}>
-                <Text style={[styles.settingsOptionTitle, { color: theme.colors.text }]}>Edit Group Info</Text>
-                <Text style={[styles.settingsOptionSubtitle, { color: theme.colors.textSecondary }]}>Change name and description</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.settingsOption, { borderBottomColor: theme.colors.border }]}
-              onPress={() => {
-                setShowSettingsModal(false);
-                setShowAddMember(true);
-              }}
-            >
-              <Ionicons name="person-add" size={20} color={theme.colors.accent} style={styles.settingsIcon} />
-              <View style={styles.settingsOptionText}>
-                <Text style={[styles.settingsOptionTitle, { color: theme.colors.text }]}>Add Members</Text>
-                <Text style={[styles.settingsOptionSubtitle, { color: theme.colors.textSecondary }]}>Invite new people to group</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.settingsOption, { borderBottomColor: theme.colors.border }]}
-              onPress={() => {
-                setShowSettingsModal(false);
-                setShowGroupStats(true);
-              }}
-            >
-              <Ionicons name="stats-chart" size={20} color={theme.colors.accent} style={styles.settingsIcon} />
-              <View style={styles.settingsOptionText}>
-                <Text style={[styles.settingsOptionTitle, { color: theme.colors.text }]}>Group Statistics</Text>
-                <Text style={[styles.settingsOptionSubtitle, { color: theme.colors.textSecondary }]}>View spending analytics</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.settingsOption}
-              onPress={() => {
-                setShowSettingsModal(false);
-                handleDeleteGroup();
-              }}
-            >
-              <Ionicons name="trash" size={20} color={theme.colors.error} style={styles.settingsIcon} />
-              <View style={styles.settingsOptionText}>
-                <Text style={[styles.settingsOptionTitle, { color: theme.colors.error }]}>Delete Group</Text>
-                <Text style={[styles.settingsOptionSubtitle, { color: theme.colors.textSecondary }]}>Permanently remove this group</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
 
-  const handleSaveGroup = () => {
+  const handleSaveGroup = async () => {
     if (!groupName.trim()) {
       Alert.alert('Error', 'Group name is required');
       return;
     }
 
-    updateGroup(groupId, {
-      name: groupName.trim(),
-      description: groupDescription.trim(),
-    });
-    
-    setEditMode(false);
-    Alert.alert('Success', 'Group updated successfully');
+    try {
+      await updateGroup(groupId, {
+        name: groupName.trim(),
+        description: groupDescription.trim()
+      });
+      setEditMode(false);
+      Alert.alert('Success', 'Group updated successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update group');
+    }
   };
 
-  const handleDeleteGroup = async () => {
-    if (!group || !group.id) {
-      Alert.alert('Error', 'Group not found');
-      return;
-    }
-
+  const handleDeleteGroup = () => {
     Alert.alert(
       'Delete Group',
       `Are you sure you want to delete "${group.name}"? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
+        {
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteGroup(group.id);
+              await deleteGroup(groupId);
               onClose();
               Alert.alert('Success', 'Group deleted successfully');
             } catch (error) {
-              console.error('Error deleting group:', error);
-              Alert.alert('Error', 'Failed to delete group. Please try again.');
+              Alert.alert('Error', 'Failed to delete group');
             }
           }
         }
@@ -199,426 +75,419 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
     );
   };
 
-  const handleRemoveMember = (memberId) => {
-    if (memberId === currentUser.id) {
-      Alert.alert('Error', 'You cannot remove yourself from the group');
+  const handleAddMember = async () => {
+    if (!newMemberEmail.trim()) {
+      Alert.alert('Error', 'Please enter an email address');
       return;
     }
 
-    const memberTransactions = groupTransactions.filter(t => 
-      t.payerId === memberId || t.participants.includes(memberId)
-    );
-
-    if (memberTransactions.length > 0) {
-      Alert.alert(
-        'Cannot Remove Member',
-        'This member has transactions in the group. Please settle all expenses first.',
-        [{ text: 'OK' }]
-      );
+    const existingUser = allUsers.find(u => u.email === newMemberEmail.trim());
+    if (!existingUser) {
+      Alert.alert('Error', 'User not found. They need to create an account first.');
       return;
     }
 
-    Alert.alert(
-      'Remove Member',
-      'Are you sure you want to remove this member from the group?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Remove', 
-          style: 'destructive',
-          onPress: () => {
-            const updatedMembers = group.members.filter(id => id !== memberId);
-            updateGroup(groupId, { members: updatedMembers });
-            Alert.alert('Success', 'Member removed successfully');
-          }
-        }
-      ]
-    );
+    if (group.members.includes(existingUser.id)) {
+      Alert.alert('Error', 'User is already a member of this group');
+      return;
+    }
+
+    try {
+      const updatedMembers = [...group.members, existingUser.id];
+      await updateGroup(groupId, { members: updatedMembers });
+      setNewMemberEmail('');
+      setShowAddMember(false);
+      Alert.alert('Success', 'Member added successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add member');
+    }
   };
 
-  // Calculate group statistics
-  const totalExpenses = groupTransactions.reduce((sum, t) => sum + t.amount, 0);
-  const memberBalances = group ? group.members.map(memberObj => {
-    // Extract the actual user from the member object
-    const member = memberObj.user || memberObj;
-    const memberId = member.id || member._id;
+  const getGroupStats = () => {
+    const totalExpenses = groupTransactions.reduce((sum, t) => sum + t.amount, 0);
+    const memberCount = group.members.length;
+    const transactionCount = groupTransactions.length;
     
-    const paid = groupTransactions
-      .filter(t => t.payerId === memberId)
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const owes = groupTransactions
-      .filter(t => t.participants.includes(memberId))
-      .reduce((sum, t) => sum + (t.amount / t.participants.length), 0);
-    
-    return {
-      member,
-      paid,
-      owes,
-      balance: paid - owes
-    };
-  }) : [];
+    return { totalExpenses, memberCount, transactionCount };
+  };
 
-  const MemberCard = ({ member, balance, showActions = true }) => {
-    if (!member) {
-      return null;
-    }
-    
-    const memberId = member.id || member._id;
-    const memberName = member.name || 'Unknown';
-    const memberEmail = member.email || '';
-    
+  const stats = getGroupStats();
+
+  const MemberItem = ({ memberId }) => {
+    const member = allUsers.find(u => u.id === memberId);
+    if (!member) return null;
+
     return (
-      <View style={[styles.memberCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-        <View style={styles.memberInfo}>
-          <View style={[styles.memberAvatar, { backgroundColor: theme.colors.accent }]}>
-            <Text style={styles.memberAvatarText}>
-              {memberName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.memberDetails}>
-            <Text style={[styles.memberName, { color: theme.colors.text }]}>
-              {memberName}
-              {memberId === currentUser?.id && (
-                <Text style={[styles.youLabel, { color: theme.colors.textTertiary }]}> (You)</Text>
-              )}
-            </Text>
-            <Text style={[styles.memberEmail, { color: theme.colors.textSecondary }]}>
-              {memberEmail}
-            </Text>
-          <View style={styles.memberBalance}>
-            <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>
-              Balance: 
-            </Text>
-            <Text style={[
-              styles.balanceAmount,
-              { 
-                color: balance.balance >= 0 ? theme.colors.success : theme.colors.error,
-                fontWeight: '600'
-              }
-            ]}>
-              ${Math.abs(balance.balance).toFixed(2)}
-            </Text>
-            <Text style={[styles.balanceStatus, { color: theme.colors.textTertiary }]}>
-              {balance.balance >= 0 ? ' is owed' : ' owes'}
-            </Text>
-          </View>
+      <View style={[styles.memberItem, { backgroundColor: theme.colors.surface }]}>
+        <View style={[styles.memberAvatar, { backgroundColor: theme.colors.primary }]}>
+          <Text style={styles.memberAvatarText}>
+            {member.name.charAt(0).toUpperCase()}
+          </Text>
         </View>
-      </View>
-      {showActions && memberId !== currentUser?.id && (
-        <TouchableOpacity
-          style={[styles.removeButton, { backgroundColor: theme.colors.error }]}
-          onPress={() => handleRemoveMember(memberId)}
-        >
-          <Text style={styles.removeButtonText}>Remove</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-    );
-  };
-
-  const StatCard = ({ title, value, subtitle, color, icon }) => (
-    <View style={[styles.statCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-      <View style={[styles.statIcon, { backgroundColor: color }]}>
-        <Text style={styles.statIconText}>{icon}</Text>
-      </View>
-      <View style={styles.statContent}>
-        <Text style={[styles.statValue, { color: theme.colors.text }]}>{value}</Text>
-        <Text style={[styles.statTitle, { color: theme.colors.textSecondary }]}>{title}</Text>
-        {subtitle && (
-          <Text style={[styles.statSubtitle, { color: theme.colors.textTertiary }]}>{subtitle}</Text>
+        <View style={styles.memberInfo}>
+          <Text style={[styles.memberName, { color: theme.colors.text }]}>
+            {member.name}
+          </Text>
+          <Text style={[styles.memberEmail, { color: theme.colors.textSecondary }]}>
+            {member.email}
+          </Text>
+        </View>
+        {member.id === currentUser.id && (
+          <View style={[styles.ownerBadge, { backgroundColor: theme.colors.success }]}>
+            <Text style={styles.ownerBadgeText}>You</Text>
+          </View>
         )}
       </View>
+    );
+  };
+
+  const StatCard = ({ title, value, subtitle }) => (
+    <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+      <Text style={[styles.statValue, { color: theme.colors.text }]}>{value}</Text>
+      <Text style={[styles.statTitle, { color: theme.colors.textSecondary }]}>{title}</Text>
+      {subtitle && (
+        <Text style={[styles.statSubtitle, { color: theme.colors.textSecondary }]}>
+          {subtitle}
+        </Text>
+      )}
     </View>
   );
 
-  // Safety check - if no group found, show error message
-  if (!group && groupId) {
-    return (
-      <Modal 
-        visible={visible} 
-        animationType="slide" 
-        presentationStyle="pageSheet"
-        onRequestClose={onClose}
-      >
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-          <View style={styles.header}>
-            <TouchableOpacity onClose={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.content}>
-            <Text style={[styles.errorText, { color: theme.colors.error }]}>
-              Group not found. Please try again.
-            </Text>
-          </View>
-        </View>
-      </Modal>
-    );
-  }
-
   return (
-    <>
-      <GroupSettingsModal />
-      <Modal 
-        visible={visible} 
-        animationType="slide" 
-        presentationStyle="pageSheet"
-        onRequestClose={onClose}
-      >
-        <Animated.View 
-          style={[
-            styles.container, 
-            { 
-              backgroundColor: theme.colors.background,
-              transform: [{ translateY }]
-            }
-          ]}
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <View style={[styles.iconContainer, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.iconText, { color: theme.colors.text }]}>←</Text>
+            </View>
+          </TouchableOpacity>
+          
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+            Group Settings
+          </Text>
+
+          <TouchableOpacity 
+            onPress={() => setEditMode(!editMode)} 
+            style={styles.editButton}
+          >
+            <View style={[styles.iconContainer, { backgroundColor: theme.colors.primary }]}>
+              <Text style={styles.iconText}>{editMode ? '✓' : 'E'}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          <SafeAreaView style={styles.safeArea}>
-            {/* Drag Indicator */}
-            <View style={styles.dragIndicatorContainer} {...panResponder.panHandlers}>
-              <View style={[styles.dragIndicator, { backgroundColor: theme.colors.textTertiary }]} />
+          <View style={[styles.groupInfo, { backgroundColor: theme.colors.card }]}>
+            <View style={[styles.groupIcon, { backgroundColor: theme.colors.primary }]}>
+              <Text style={styles.groupIconText}>G</Text>
             </View>
             
-            {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary, opacity: 0.7 }]}>Cancel</Text>
-              </TouchableOpacity>
-              <Text style={[styles.title, { color: theme.colors.text }]}>Manage Group</Text>
-              <TouchableOpacity 
-                onPress={() => setShowSettingsModal(true)} 
-                style={styles.settingsButton}
-              >
-                <Ionicons name="settings-outline" size={20} color={theme.colors.accent} />
-              </TouchableOpacity>
-            </View>
-
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Group Info */}
-          <View style={styles.section}>
             {editMode ? (
-              <View>
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Group Name</Text>
+              <View style={styles.editForm}>
                 <TextInput
-                  style={[styles.input, { 
+                  style={[styles.editInput, { 
                     backgroundColor: theme.colors.surface, 
-                    color: theme.colors.text, 
-                    borderColor: theme.colors.border 
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text 
                   }]}
                   value={groupName}
                   onChangeText={setGroupName}
-                  placeholder="Enter group name"
-                  placeholderTextColor={theme.colors.textTertiary}
+                  placeholder="Group name"
+                  placeholderTextColor={theme.colors.textSecondary}
                 />
-                
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Description</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea, { 
+                  style={[styles.editInput, styles.descriptionInput, { 
                     backgroundColor: theme.colors.surface, 
-                    color: theme.colors.text, 
-                    borderColor: theme.colors.border 
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text 
                   }]}
                   value={groupDescription}
                   onChangeText={setGroupDescription}
-                  placeholder="Enter group description (optional)"
-                  placeholderTextColor={theme.colors.textTertiary}
+                  placeholder="Group description (optional)"
+                  placeholderTextColor={theme.colors.textSecondary}
                   multiline
-                  numberOfLines={3}
                 />
-                
-                <View style={styles.editActions}>
-                  <TouchableOpacity
-                    style={[styles.saveButton, { backgroundColor: theme.colors.success }]}
-                    onPress={handleSaveGroup}
-                  >
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  style={[styles.saveButton, { backgroundColor: theme.colors.success }]}
+                  onPress={handleSaveGroup}
+                >
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                </TouchableOpacity>
               </View>
             ) : (
-              <View style={[styles.groupCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                <View style={[styles.groupIcon, { backgroundColor: theme.colors.accent }]}>
-                  <Text style={styles.groupIconText}>{group.name.charAt(0).toUpperCase()}</Text>
-                </View>
-                <View style={styles.groupDetails}>
-                  <Text style={[styles.groupName, { color: theme.colors.text }]}>{group.name}</Text>
-                  {group.description && (
-                    <Text style={[styles.groupDescription, { color: theme.colors.textSecondary }]}>
-                      {group.description}
-                    </Text>
-                  )}
-                  <Text style={[styles.groupMeta, { color: theme.colors.textTertiary }]}>
-                    Created {new Date(group.createdAt).toLocaleDateString()} • {group.members.length} members
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
-
-          {/* Group Statistics */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Group Statistics</Text>
-              <TouchableOpacity
-                onPress={() => setShowGroupStats(!showGroupStats)}
-                style={styles.toggleButton}
-              >
-                <Text style={[styles.toggleButtonText, { color: theme.colors.accent }]}>
-                  {showGroupStats ? 'Hide' : 'Show'}
+              <View style={styles.groupDetails}>
+                <Text style={[styles.groupName, { color: theme.colors.text }]}>
+                  {group.name}
                 </Text>
-              </TouchableOpacity>
-            </View>
-
-            {showGroupStats && (
-              <View style={styles.statsGrid}>
-                <StatCard
-                  title="Total Expenses"
-                  value={`$${totalExpenses.toFixed(2)}`}
-                  subtitle={`${groupTransactions.length} transactions`}
-                  color={theme.colors.error}
-                  icon="💰"
-                />
-                <StatCard
-                  title="Average per Person"
-                  value={`$${(totalExpenses / group.members.length).toFixed(2)}`}
-                  subtitle="total spending"
-                  color={theme.colors.info}
-                  icon="📊"
-                />
-                <StatCard
-                  title="Active Members"
-                  value={group.members.length}
-                  subtitle="in group"
-                  color={theme.colors.success}
-                  icon="👥"
-                />
-                <StatCard
-                  title="Recent Activity"
-                  value={groupTransactions.filter(t => {
-                    const transactionDate = new Date(t.date);
-                    const weekAgo = new Date();
-                    weekAgo.setDate(weekAgo.getDate() - 7);
-                    return transactionDate >= weekAgo;
-                  }).length}
-                  subtitle="this week"
-                  color={theme.colors.warning}
-                  icon="⚡"
-                />
+                {group.description && (
+                  <Text style={[styles.groupDescription, { color: theme.colors.textSecondary }]}>
+                    {group.description}
+                  </Text>
+                )}
               </View>
             )}
           </View>
 
-          {/* Members */}
-          <View style={styles.section}>
+          <View style={styles.statsSection}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Group Statistics
+            </Text>
+            <View style={styles.statsGrid}>
+              <StatCard
+                title="Total Expenses"
+                value={`$${stats.totalExpenses.toFixed(2)}`}
+              />
+              <StatCard
+                title="Members"
+                value={stats.memberCount}
+              />
+              <StatCard
+                title="Transactions"
+                value={stats.transactionCount}
+              />
+            </View>
+          </View>
+
+          <View style={styles.membersSection}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Members ({group.members.length})
               </Text>
               <TouchableOpacity
                 onPress={() => setShowAddMember(true)}
-                style={[styles.addMemberButton, { backgroundColor: theme.colors.accent }]}
+                style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
               >
-                <Text style={styles.addMemberButtonText}>Add Member</Text>
+                <Text style={styles.addButtonText}>Add</Text>
               </TouchableOpacity>
             </View>
-
-            {memberBalances.map(({ member, ...balance }) => (
-              <MemberCard key={member?.id || member?._id || Math.random()} member={member} balance={balance} />
-            ))}
+            
+            <View style={styles.membersList}>
+              {group.members.map((memberId) => (
+                <MemberItem key={memberId} memberId={memberId} />
+              ))}
+            </View>
           </View>
 
-          {/* Danger Zone */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.error }]}>Danger Zone</Text>
-            <View style={[styles.dangerCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.error }]}>
-              <Text style={[styles.dangerTitle, { color: theme.colors.text }]}>Delete Group</Text>
-              <Text style={[styles.dangerDescription, { color: theme.colors.textSecondary }]}>
-                Permanently delete this group and all its data. This action cannot be undone.
+          <View style={styles.dangerSection}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.error }]}>
+              Danger Zone
+            </Text>
+            <TouchableOpacity
+              style={[styles.deleteButton, { borderColor: theme.colors.error }]}
+              onPress={handleDeleteGroup}
+            >
+              <Text style={[styles.deleteButtonText, { color: theme.colors.error }]}>
+                Delete Group
               </Text>
-              <TouchableOpacity
-                style={[styles.dangerButton, { backgroundColor: theme.colors.error }]}
-                onPress={handleDeleteGroup}
-              >
-                <Text style={styles.dangerButtonText}>Delete Group</Text>
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
-        {/* Add Member Notice */}
-        {showAddMember && (
-          <View style={[styles.addMemberNotice, { backgroundColor: theme.colors.primary + '20', borderColor: theme.colors.primary }]}>
-            <View style={styles.addMemberNoticeContent}>
-              <Text style={[styles.addMemberNoticeTitle, { color: theme.colors.text }]}>Add Member</Text>
-              <TouchableOpacity onPress={() => setShowAddMember(false)} style={styles.closeNoticeButton}>
-                <Text style={[styles.closeNoticeButtonText, { color: theme.colors.textSecondary }]}>✕</Text>
-              </TouchableOpacity>
+        <Modal visible={showAddMember} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.addMemberModal, { backgroundColor: theme.colors.card }]}>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                Add New Member
+              </Text>
+              <TextInput
+                style={[styles.emailInput, { 
+                  backgroundColor: theme.colors.surface, 
+                  borderColor: theme.colors.border,
+                  color: theme.colors.text 
+                }]}
+                placeholder="Enter email address"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={newMemberEmail}
+                onChangeText={setNewMemberEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: theme.colors.surface }]}
+                  onPress={() => {
+                    setShowAddMember(false);
+                    setNewMemberEmail('');
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={handleAddMember}
+                >
+                  <Text style={styles.modalButtonText}>Add Member</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={[styles.addMemberNoticeDescription, { color: theme.colors.textSecondary }]}>
-              💡 This feature is coming soon! Members will be able to join by scanning a QR code or using an invite link.
-            </Text>
-            <TouchableOpacity
-              style={[styles.addMemberNoticeButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => setShowAddMember(false)}
-            >
-              <Text style={styles.addMemberNoticeButtonText}>Got it</Text>
-            </TouchableOpacity>
           </View>
-        )}
-          </SafeAreaView>
-        </Animated.View>
-      </Modal>
-    </>
+        </Modal>
+      </SafeAreaView>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  dragIndicatorContainer: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  dragIndicator: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    opacity: 0.5,
+    backgroundColor: '#fafbfc',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
     borderBottomWidth: 1,
   },
   closeButton: {
-    padding: 8,
-  },
-  closeButtonText: {
-    fontSize: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
+    width: 40,
   },
   editButton: {
-    padding: 8,
+    width: 40,
+    alignItems: 'flex-end',
   },
-  editButtonText: {
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: 'white',
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
-  section: {
-    marginBottom: 24,
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 200,
+  },
+  groupInfo: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 25,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  groupIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  groupIconText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: 'white',
+  },
+  groupDetails: {
+    alignItems: 'center',
+  },
+  groupName: {
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  groupDescription: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  editForm: {
+    width: '100%',
+  },
+  editInput: {
+    borderWidth: 2,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    fontSize: 16,
+    marginBottom: 15,
+  },
+  descriptionInput: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  saveButton: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  statsSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  statTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  membersSection: {
+    marginBottom: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -626,322 +495,133 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  addButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
-  toggleButton: {
-    padding: 8,
-  },
-  toggleButtonText: {
+  addButtonText: {
+    color: 'white',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  groupCard: {
+  membersList: {
+    gap: 12,
+  },
+  memberItem: {
     flexDirection: 'row',
-    padding: 16,
+    alignItems: 'center',
+    backgroundColor: 'white',
     borderRadius: 12,
+    padding: 16,
     borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  groupIcon: {
+  memberAvatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
-  groupIconText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  groupDetails: {
-    flex: 1,
-  },
-  groupName: {
+  memberAvatarText: {
     fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  groupDescription: {
-    fontSize: 14,
-    marginBottom: 8,
-    lineHeight: 20,
-  },
-  groupMeta: {
-    fontSize: 12,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  editActions: {
-    marginTop: 20,
-  },
-  saveButton: {
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  saveButtonText: {
+    fontWeight: '800',
     color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: '45%',
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  statIconText: {
-    fontSize: 16,
-  },
-  statContent: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  statTitle: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  statSubtitle: {
-    fontSize: 10,
-  },
-  addMemberButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  addMemberButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  memberCard: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 8,
   },
   memberInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  memberAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  memberAvatarText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  memberDetails: {
     flex: 1,
   },
   memberName: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '700',
     marginBottom: 2,
   },
-  youLabel: {
-    fontWeight: '400',
-  },
   memberEmail: {
-    fontSize: 12,
-    marginBottom: 4,
+    fontSize: 14,
   },
-  memberBalance: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  balanceLabel: {
-    fontSize: 12,
-  },
-  balanceAmount: {
-    fontSize: 12,
-  },
-  balanceStatus: {
-    fontSize: 12,
-  },
-  removeButton: {
-    alignSelf: 'flex-start',
+  ownerBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
-  },
-  removeButtonText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  dangerCard: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-  },
-  dangerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  dangerDescription: {
-    fontSize: 14,
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  dangerButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
     borderRadius: 6,
-    alignSelf: 'flex-start',
   },
-  dangerButtonText: {
+  ownerBadgeText: {
     color: 'white',
-    fontWeight: '600',
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '700',
   },
-  addMemberNotice: {
-    margin: 16,
-    borderRadius: 12,
-    padding: 16,
+  dangerSection: {
+    marginBottom: 40,
+  },
+  deleteButton: {
     borderWidth: 2,
-    marginBottom: 16,
-  },
-  addMemberNoticeContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  addMemberNoticeTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  closeNoticeButton: {
-    width: 24,
-    height: 24,
     borderRadius: 12,
-    justifyContent: 'center',
+    paddingVertical: 14,
     alignItems: 'center',
   },
-  closeNoticeButtonText: {
+  deleteButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  addMemberNoticeDescription: {
-    fontSize: 14,
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  addMemberNoticeButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  addMemberNoticeButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  // Settings Modal Styles
-  settingsOverlay: {
+  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    padding: 20,
   },
-  settingsModal: {
+  addMemberModal: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
     width: '100%',
     maxWidth: 400,
-    borderRadius: 16,
-    maxHeight: '80%',
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 12,
   },
-  settingsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 20,
   },
-  settingsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  settingsCloseButton: {
-    padding: 4,
-  },
-  settingsContent: {
-    paddingVertical: 8,
-  },
-  settingsOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 0.5,
-  },
-  settingsIcon: {
-    marginRight: 12,
-    width: 20,
-  },
-  settingsOptionText: {
-    flex: 1,
-  },
-  settingsOptionTitle: {
+  emailInput: {
+    borderWidth: 2,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 2,
+    marginBottom: 20,
   },
-  settingsOptionSubtitle: {
-    fontSize: 13,
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
   },
-  settingsButton: {
-    padding: 8,
-  },
-  safeArea: {
+  modalButton: {
     flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'white',
   },
 });
 

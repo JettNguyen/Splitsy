@@ -1,3 +1,4 @@
+//splitsy backend server - express.js api with mongodb
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -6,7 +7,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-// Route imports
+//route imports
 const authRoutes = require('./routes/auth');
 const groupRoutes = require('./routes/groups');
 const transactionRoutes = require('./routes/transactions');
@@ -14,7 +15,7 @@ const transactionRoutes = require('./routes/transactions');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Connect to MongoDB
+//connect to mongodb
 const connectDB = async () => {
   try {
     console.log('MongoDB URI:', process.env.MONGODB_URI);
@@ -31,21 +32,21 @@ const connectDB = async () => {
   }
 };
 
-// Security middleware
+//security middleware
 app.use(helmet({
-  contentSecurityPolicy: false // Disable for development
+  contentSecurityPolicy: false //disable for development
 }));
 
-// Rate limiting
+//rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, //15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, //limit each ip to 100 requests per windowms
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.'
   },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  standardHeaders: true, //return rate limit info in the `ratelimit-*` headers
+  legacyHeaders: false, //disable the `x-ratelimit-*` headers
 });
 
 app.use(limiter);
@@ -180,10 +181,32 @@ app.use('*', (req, res) => {
 const startServer = async () => {
   await connectDB();
   
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     console.log(`📱 Health check: http://localhost:${PORT}/health`);
     console.log(`📊 API Base URL: http://localhost:${PORT}/api`);
+    console.log(`🌐 Network access: http://192.168.0.38:${PORT}/api`);
+  });
+
+  server.on('error', (error) => {
+    if (error.syscall !== 'listen') {
+      throw error;
+    }
+
+    const bind = typeof PORT === 'string' ? 'Pipe ' + PORT : 'Port ' + PORT;
+
+    switch (error.code) {
+      case 'EACCES':
+        console.error(`${bind} requires elevated privileges`);
+        process.exit(1);
+        break;
+      case 'EADDRINUSE':
+        console.error(`${bind} is already in use`);
+        process.exit(1);
+        break;
+      default:
+        throw error;
+    }
   });
 };
 

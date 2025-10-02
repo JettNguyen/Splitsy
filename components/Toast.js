@@ -8,6 +8,7 @@ import {
   SafeAreaView
 } from 'react-native';
 
+//toast notification component with animations
 const Toast = ({ 
   visible, 
   message, 
@@ -20,7 +21,7 @@ const Toast = ({
 
   useEffect(() => {
     if (visible) {
-      // Show animation
+      //show animation
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -34,7 +35,7 @@ const Toast = ({
         }),
       ]).start();
 
-      // Auto hide after duration
+      //auto hide after duration
       const timer = setTimeout(() => {
         hideToast();
       }, duration);
@@ -65,15 +66,15 @@ const Toast = ({
   const getToastStyle = () => {
     switch (type) {
       case 'success':
-        return { backgroundColor: '#10B981', icon: '✅' };
+        return { backgroundColor: '#10B981', icon: 'S' };
       case 'error':
-        return { backgroundColor: '#EF4444', icon: '❌' };
+        return { backgroundColor: '#EF4444', icon: 'E' };
       case 'warning':
-        return { backgroundColor: '#F59E0B', icon: '⚠️' };
+        return { backgroundColor: '#F59E0B', icon: 'W' };
       case 'info':
-        return { backgroundColor: '#3B82F6', icon: 'ℹ️' };
+        return { backgroundColor: '#7c3aed', icon: 'I' };
       default:
-        return { backgroundColor: '#10B981', icon: '✅' };
+        return { backgroundColor: '#10B981', icon: 'S' };
     }
   };
 

@@ -12,11 +12,16 @@ import {
   Alert,
   SafeAreaView
 } from 'react-native';
+
+//external libraries
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { useTheme } from '../context/ThemeContext';
-import { API_CONFIG } from '../config/api';
 
+//context and config
+import { useTheme } from '../context/ThemeContext';
+import { API_CONFIG } from '../config/ApiConfig';
+
+//receipt scanner component for extracting data from receipt images
 const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   const { theme } = useTheme();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -29,7 +34,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
     items: []
   });
 
-  // Reset state when modal closes
+  //reset state when modal closes
   useEffect(() => {
     if (!visible) {
       setCapturedImage(null);
@@ -46,11 +51,10 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
 
   const processImageWithOCR = async (imageUri) => {
     try {
-      // Always try OCR first since it's now enabled by default
-      console.log('Processing image with OCR...');
+      // Try OCR first since it's now enabled by default
 
       // Optimize image for OCR
-      const optimizedImage = await ImageManipulator.manipulateAsync(
+      const processedImage = await ImageManipulator.manipulateAsync(
         imageUri,
         [
           { resize: { width: API_CONFIG.MAX_IMAGE_SIZE } },
@@ -71,7 +75,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
           
           const requestBody = {
             requests: [{
-              image: { content: optimizedImage.base64 },
+              image: { content: processedImage.base64 },
               features: [{ type: 'TEXT_DETECTION', maxResults: 1 }]
             }]
           };
@@ -85,10 +89,9 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
           const result = await response.json();
           if (result.responses?.[0]?.textAnnotations?.[0]) {
             extractedText = result.responses[0].textAnnotations[0].description;
-            console.log('Google Vision OCR successful');
           }
         } catch (error) {
-          console.log('Google Vision failed, trying free OCR service...');
+          // Fallback to free OCR service
         }
       }
 
@@ -96,7 +99,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       if (!extractedText) {
         try {
           const formData = new FormData();
-          formData.append('base64Image', `data:image/jpeg;base64,${optimizedImage.base64}`);
+          formData.append('base64Image', `data:image/jpeg;base64,${processedImage.base64}`);
           formData.append('language', 'eng');
           formData.append('apikey', API_CONFIG.OCR_API_KEY);
           formData.append('OCREngine', '2');
@@ -110,29 +113,18 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
           
           if (result.ParsedResults && result.ParsedResults[0] && result.ParsedResults[0].ParsedText) {
             extractedText = result.ParsedResults[0].ParsedText;
-            console.log('Free OCR successful');
           }
         } catch (error) {
-          console.log('Free OCR failed:', error);
+          // OCR processing failed
         }
       }
 
-      // Parse extracted text or use enhanced simulation as fallback
+      // Parse extracted text or use mock data as fallback
       if (extractedText && extractedText.trim().length > 10) {
-        console.log('=== OCR EXTRACTED TEXT ===');
-        console.log(extractedText);
-        console.log('=== END OCR TEXT ===');
         const parsedData = parseReceiptText(extractedText);
-        console.log('=== PARSED DATA ===');
-        console.log('Merchant:', parsedData.merchant);
-        console.log('Date:', parsedData.date);
-        console.log('Total:', parsedData.total);
-        console.log('Items:', parsedData.items);
-        console.log('=== END PARSED DATA ===');
         return parsedData;
       } else {
-        console.log('OCR failed or insufficient text, using enhanced simulation');
-        return enhancedReceiptSimulation();
+        return mockReceiptData();
       }
 
     } catch (error) {
@@ -142,7 +134,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
         'Using smart detection for this receipt.',
         [{ text: 'OK' }]
       );
-      return enhancedReceiptSimulation();
+      return mockReceiptData();
     }
   };
 
@@ -172,7 +164,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       /(?:^|\s)(\d+\.\d{2})(?:\s*$)/
     ];
 
-    // Enhanced item patterns for column-based receipts like Target
+    // Item patterns for column-based receipts like Target
     const itemPatterns = [
       // Target format: "270060508: 24.8oz pzrol NF $5.89" (item code: description size/type price)
       /^(\d+):\s*(.+?)\s+([A-Z]{1,3})\s*\$?(\d+\.\d{2})$/,
@@ -243,7 +235,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
     }
 
     // Multi-format receipt parser (Target, Walmart, and others)
-    console.log('=== ANALYZING LINES FOR ITEMS ===');
     
     // Step 1: Detect receipt format
     let receiptFormat = 'unknown';
@@ -297,13 +288,10 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
     
     if (hasTargetFormat) {
       receiptFormat = 'target';
-      console.log('📋 Detected TARGET format');
     } else if (itemNamesSection && upcSection) {
       receiptFormat = 'walmart';
-      console.log('📋 Detected WALMART format');
     } else {
       receiptFormat = 'generic';
-      console.log('📋 Using GENERIC format');
     }
     
     // Step 2: Parse based on detected format
@@ -317,8 +305,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
     
     // TARGET FORMAT PARSER
     function parseTargetFormat() {
-      console.log('=== PARSING TARGET FORMAT ===');
-      
       const itemDescriptions = [];
       const priceList = [];
       
@@ -331,7 +317,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
             name: cleanItemName(itemMatch[2]),
             lineIndex: i
           });
-          console.log(`📝 Target item: "${itemMatch[2]}"`);
         }
       }
       
@@ -343,7 +328,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
           let price = priceMatch[1];
           if (price.indexOf('.') === -1) price += '.00';
           priceList.push({ price: price, lineIndex: i });
-          console.log(`💰 Target price: $${price}`);
         }
       }
       
@@ -354,13 +338,12 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
           name: itemDescriptions[i].name,
           price: priceList[i].price
         });
-        console.log(`✓ Target match: "${itemDescriptions[i].name}" - $${priceList[i].price}`);
       }
     }
     
     // WALMART FORMAT PARSER
     function parseWalmartFormat() {
-      console.log('=== PARSING WALMART FORMAT ===');
+
       
       const itemNames = [];
       const itemPrices = [];
@@ -368,7 +351,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       // Step 1: Find item names section (consecutive all-caps product names)
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        console.log(`Line ${i}: "${line}"`);
         
         // Look for item names (all caps, no numbers at start, reasonable length)
         if (line.match(/^[A-Z][A-Z\s\d]{1,25}$/) && 
@@ -380,7 +362,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
             name: cleanWalmartItemName(line),
             lineIndex: i
           });
-          console.log(`📝 Walmart item: "${line}"`);
         }
       }
       
@@ -396,7 +377,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
           
           // Skip if this looks like a total/subtotal price
           if (parseFloat(price) > 20 && (taxCode === '' || i > lines.length - 10)) {
-            console.log(`⏭️ Skipping likely total: $${price}`);
             continue;
           }
           
@@ -405,12 +385,11 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
             taxCode: taxCode,
             lineIndex: i
           });
-          console.log(`💰 Walmart price: $${price} ${taxCode}`);
         }
       }
       
       // Step 3: Match items with prices sequentially
-      console.log(`=== MATCHING ${itemNames.length} ITEMS WITH ${itemPrices.length} PRICES ===`);
+
       
       const minCount = Math.min(itemNames.length, itemPrices.length);
       for (let i = 0; i < minCount; i++) {
@@ -418,17 +397,19 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
           name: itemNames[i].name,
           price: itemPrices[i].price
         });
-        console.log(`✓ Walmart match: "${itemNames[i].name}" - $${itemPrices[i].price} ${itemPrices[i].taxCode}`);
       }
     }
     
     // GENERIC FORMAT PARSER
     function parseGenericFormat() {
-      console.log('=== PARSING GENERIC FORMAT ===');
+
       
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        console.log(`Line ${i}: "${line}"`);
+        for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        // Skip obvious non-item lines
         
         // Try various generic patterns
         const patterns = [
@@ -455,7 +436,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
                 name: cleanItemName(itemName),
                 price: price
               });
-              console.log(`✓ Generic match: "${itemName}" - $${price}`);
               break;
             }
           }
@@ -498,7 +478,8 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       return name;
     }
     
-    console.log(`=== EXTRACTED ${items.length} ITEMS ===`);
+    return items;
+  };
 
     // Clean up merchant name
     if (merchant) {
@@ -524,7 +505,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
     };
   };
 
-  const enhancedReceiptSimulation = () => {
+  const mockReceiptData = () => {
     // More realistic simulation with common receipt patterns
     const realMerchants = [
       'Target', 'Walmart Supercenter', 'Costco Wholesale', 'CVS Pharmacy',
@@ -705,7 +686,9 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
             </View>
             
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-              <Text style={{ fontSize: 80, marginBottom: 30 }}>📱</Text>
+              <View style={styles.cameraIconContainer}>
+                <Text style={styles.cameraIconText}>C</Text>
+              </View>
               <Text style={[{ fontSize: 24, fontWeight: '600', marginBottom: 10, color: theme.colors.text, textAlign: 'center' }]}>
                 Scan Receipt
               </Text>
@@ -729,7 +712,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
                 disabled={isProcessing}
               >
                 <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>
-                  🖼️  Choose from Gallery
+                  Choose from Gallery
                 </Text>
               </TouchableOpacity>
               
@@ -848,6 +831,20 @@ const styles = StyleSheet.create({
   },
   centerContainer: {
     flex: 1,
+  },
+  cameraIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 25,
+    backgroundColor: '#7c3aed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  cameraIconText: {
+    fontSize: 40,
+    fontWeight: '900',
+    color: 'white',
   },
   header: {
     flexDirection: 'row',

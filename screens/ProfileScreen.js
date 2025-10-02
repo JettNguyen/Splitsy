@@ -11,10 +11,15 @@ import {
   SafeAreaView,
   Switch
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
+
+//context imports
 import { useUser } from '../context/UserContext';
 import { useData } from '../context/ApiDataContext';
 import { useTheme } from '../context/ThemeContext';
 
+//profile and settings screen component
 const ProfileScreen = ({ 
   onNavigateToPaymentMethods,
   onNavigateToNotifications,
@@ -31,8 +36,8 @@ const ProfileScreen = ({
     phone: currentUser?.phone || ''
   });
 
-  const balanceData = calculateUserBalance();
-  const balance = balanceData?.net || 0;
+  const balanceData = calculateUserBalance() || { owed: 0, owes: 0, net: 0 };
+  const balance = balanceData.net || 0;
 
   const handleLogout = () => {
     Alert.alert(
@@ -70,16 +75,16 @@ const ProfileScreen = ({
   };
 
   const MenuItem = ({ icon, title, subtitle, onPress, showArrow = true }) => (
-    <TouchableOpacity style={[styles.menuItem, { backgroundColor: theme.colors.card }]} onPress={onPress}>
+    <TouchableOpacity style={styles.menuItem} onPress={onPress}>
       <View style={styles.menuItemContent}>
         <View style={[styles.menuIconContainer, { backgroundColor: theme.colors.surface }]}>
-          <Text style={styles.menuIcon}>{icon}</Text>
+          <Ionicons name={icon} size={20} color={theme.colors.textSecondary} />
         </View>
         <View style={styles.menuTextContainer}>
           <Text style={[styles.menuTitle, { color: theme.colors.text }]}>{title}</Text>
           <Text style={[styles.menuSubtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>
         </View>
-        {showArrow && <Text style={[styles.menuArrow, { color: theme.colors.textTertiary }]}>›</Text>}
+        {showArrow && <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />}
       </View>
     </TouchableOpacity>
   );
@@ -97,15 +102,15 @@ const ProfileScreen = ({
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <SafeAreaView style={styles.safeAreaTop} />
       <ScrollView style={[styles.scrollContainer, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.scrollContent}>
-        {/* Profile Header */}
+        {/*profile header*/}
         <View style={[styles.profileHeader, { backgroundColor: theme.colors.card }]}>
           <View style={[styles.avatarContainer, { backgroundColor: theme.colors.primary }]}>
-            <Text style={styles.avatarText}>{currentUser?.avatar || 'U'}</Text>
+            <Text style={styles.avatarText}>{currentUser?.avatar || currentUser?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
           </View>
           <Text style={[styles.userName, { color: theme.colors.text }]}>{currentUser?.name}</Text>
           <Text style={[styles.userEmail, { color: theme.colors.textSecondary }]}>{currentUser?.email}</Text>
           
-          {/* Balance Summary */}
+          {/*balance summary */}
           <View style={[styles.balanceContainer, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.balanceItem}>
               <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>Total Balance</Text>
@@ -122,18 +127,18 @@ const ProfileScreen = ({
           </View>
         </View>
 
-        {/* Account Section */}
+        {/*account section*/}
         <MenuSection title="Account">
           <MenuItem
-            icon="✏️"
+            icon="person-circle-outline"
             title="Edit Profile"
             subtitle="Update your name, email, and phone"
             onPress={() => setShowEditModal(true)}
           />
-          <View style={[styles.themeToggleContainer, { backgroundColor: theme.colors.card }]}>
+          <View style={styles.themeToggleContainer}>
             <View style={styles.menuItemContent}>
               <View style={[styles.menuIconContainer, { backgroundColor: theme.colors.surface }]}>
-                <Text style={styles.menuIcon}>{isDarkMode ? '🌙' : '☀️'}</Text>
+                <Ionicons name={isDarkMode ? 'moon' : 'sunny'} size={20} color={theme.colors.textSecondary} />
               </View>
               <View style={styles.menuTextContainer}>
                 <Text style={[styles.menuTitle, { color: theme.colors.text }]}>Dark Mode</Text>
@@ -152,23 +157,23 @@ const ProfileScreen = ({
             </View>
           </View>
           <MenuItem
-            icon="💳"
+            icon="card-outline"
             title="Payment Methods"
             subtitle="Manage your payment apps"
             onPress={onNavigateToPaymentMethods}
           />
           <MenuItem
-            icon="🔔"
+            icon="notifications-outline"
             title="Notifications"
             subtitle="Manage notification preferences"
             onPress={onNavigateToNotifications}
           />
         </MenuSection>
 
-        {/* Groups Section */}
+        {/*groups section*/}
         <MenuSection title="Groups">
           <MenuItem
-            icon="👥"
+            icon="people-outline"
             title="Manage Groups"
             subtitle="View and edit your groups"
             onPress={() => {
@@ -180,36 +185,14 @@ const ProfileScreen = ({
             }}
           />
           <MenuItem
-            icon="📊"
+            icon="bar-chart-outline"
             title="Expense Reports"
             subtitle="View detailed spending reports"
             onPress={onNavigateToExpenseReports}
           />
         </MenuSection>
 
-        {/* Support Section */}
-        <MenuSection title="Support">
-          <MenuItem
-            icon="❓"
-            title="Help & FAQ"
-            subtitle="Get help and find answers"
-            onPress={() => Alert.alert('Coming Soon', 'Help section will be available in a future update')}
-          />
-          <MenuItem
-            icon="📧"
-            title="Contact Support"
-            subtitle="Get in touch with our team"
-            onPress={() => Alert.alert('Coming Soon', 'Contact support will be available in a future update')}
-          />
-          <MenuItem
-            icon="⭐"
-            title="Rate Splitsy"
-            subtitle="Leave a review on the app store"
-            onPress={() => Alert.alert('Coming Soon', 'App store rating will be available in a future update')}
-          />
-        </MenuSection>
-
-        {/* Sign Out */}
+        {/*sign out*/}
         <View style={styles.signOutContainer}>
           <TouchableOpacity style={[styles.signOutButton, { backgroundColor: theme.colors.error }]} onPress={handleLogout}>
             <Text style={styles.signOutText}>Sign Out</Text>
@@ -217,7 +200,7 @@ const ProfileScreen = ({
         </View>
       </ScrollView>
 
-      {/* Edit Profile Modal */}
+      {/*edit profile modal*/}
       <Modal
         visible={showEditModal}
         animationType="slide"
@@ -288,18 +271,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 34, // Extra padding for devices with home indicator
+    paddingBottom: 200,
   },
   profileHeader: {
     alignItems: 'center',
-    padding: 24,
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 32, // Increased spacing to account section
+    padding: 25,
+    marginHorizontal: 15,
+    marginTop: 15,
+    marginBottom: 30,
     borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowColor: '#673e9dff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -309,41 +292,57 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 15,
   },
   avatarText: {
     fontSize: 32,
     fontWeight: '700',
     color: 'white',
+    fontFamily: FONT_FAMILY_BOLD,
   },
   userName: {
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 5,
+    fontFamily: FONT_FAMILY_BOLD,
   },
   userEmail: {
     fontSize: 16,
     marginBottom: 20,
+    fontFamily: FONT_FAMILY,
   },
   balanceContainer: {
     borderRadius: 12,
-    padding: 16,
+    padding: 15,
     width: '100%',
+    borderWidth: 0.5,
+    borderColor: 'rgba(148, 163, 184, 0.2)',
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
   balanceItem: {
     alignItems: 'center',
   },
   balanceLabel: {
     fontSize: 14,
-    marginBottom: 4,
+    marginBottom: 5,
+    fontFamily: FONT_FAMILY,
   },
   balanceAmount: {
     fontSize: 32,
     fontWeight: '700',
     marginBottom: 4,
+    fontFamily: FONT_FAMILY_BOLD,
   },
   balanceStatus: {
     fontSize: 14,
+    fontFamily: FONT_FAMILY,
   },
   menuSection: {
     marginHorizontal: 16,
@@ -356,13 +355,14 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: FONT_FAMILY,
   },
   sectionContent: {
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowColor: '#673e9dff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -370,13 +370,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
   },
   themeToggleContainer: {
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
   },
   menuItemContent: {
     flexDirection: 'row',
@@ -390,9 +398,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  menuIcon: {
-    fontSize: 18,
-  },
+
   menuTextContainer: {
     flex: 1,
   },
@@ -400,14 +406,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 2,
+    fontFamily: FONT_FAMILY,
   },
   menuSubtitle: {
     fontSize: 14,
+    fontFamily: FONT_FAMILY,
   },
-  menuArrow: {
-    fontSize: 20,
-    fontWeight: '300',
-  },
+
   signOutContainer: {
     paddingHorizontal: 16,
     paddingBottom: 24,
@@ -421,6 +426,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: FONT_FAMILY,
   },
   modalContainer: {
     flex: 1,
@@ -454,11 +460,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 0.5,
+    borderColor: 'rgba(148, 163, 184, 0.2)',
+    shadowColor: '#673e9dff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 6,
   },
   formLabel: {
     fontSize: 14,

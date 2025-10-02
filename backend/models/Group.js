@@ -185,20 +185,11 @@ groupSchema.methods.removeMember = function(userId) {
 
 // Method to check if user is member
 groupSchema.methods.isMember = function(userId) {
-  console.log('isMember check - userId:', userId);
-  console.log('isMember check - members:', this.members);
-  
-  const result = this.members.some(member => {
+  return this.members.some(member => {
     // Handle both populated and non-populated cases
     const memberUserId = member.user._id || member.user;
-    console.log('Comparing memberUserId:', memberUserId, 'with userId:', userId);
-    const match = memberUserId.toString() === userId.toString();
-    console.log('Match result:', match);
-    return match;
+    return memberUserId.toString() === userId.toString();
   });
-  
-  console.log('Final isMember result:', result);
-  return result;
 };
 
 // Method to check if user is admin

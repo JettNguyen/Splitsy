@@ -30,8 +30,8 @@ export const NotificationProvider = ({ children }) => {
       if (stored) {
         setNotifications(JSON.parse(stored));
       }
-      // Remove sample notifications - let them be created naturally through app usage
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error loading notifications:', error);
     }
   };
@@ -40,7 +40,8 @@ export const NotificationProvider = ({ children }) => {
     try {
       await AsyncStorage.setItem('notifications', JSON.stringify(newNotifications));
       setNotifications(newNotifications);
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error saving notifications:', error);
     }
   };
@@ -80,7 +81,7 @@ export const NotificationProvider = ({ children }) => {
     await saveNotifications(updated);
   };
 
-  // Notification types
+  //notification types
   const notifyExpenseAdded = async (expense, groupName) => {
     return await addNotification({
       type: 'expense_added',

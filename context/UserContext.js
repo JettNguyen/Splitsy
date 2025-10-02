@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+//user context for managing authentication and user data
 const UserContext = createContext();
 
 export const useUser = () => {
@@ -17,17 +18,17 @@ export const UserProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load user data on app start
+  //load user data on app start
   useEffect(() => {
     loadUserData();
     
-    // Fail-safe timeout to prevent infinite loading
+    //fail-safe timeout to prevent infinite loading
     const timeout = setTimeout(() => {
       if (isLoading) {
-        console.warn('UserContext: Loading timeout reached, stopping loading state');
+        // Loading timeout reached
         setIsLoading(false);
       }
-    }, 5000); // 5 second timeout
+    }, 5000); //5 second timeout
 
     return () => clearTimeout(timeout);
   }, []);
@@ -36,15 +37,15 @@ export const UserProvider = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Check for JWT token (new API authentication)
+      //check for jwt token
       const token = await AsyncStorage.getItem('authToken');
       if (token) {
         try {
-          // Import ApiService dynamically to avoid circular dependencies
-          const { default: apiService } = await import('../services/apiService');
+          //import apiservice dynamically
+          const { default: apiService } = await import('../services/ApiService');
           await apiService.init();
           
-          // Try to get user profile from API
+          //try to get user profile from api
           const profile = await apiService.getUserProfile();
           if (profile.success) {
             setCurrentUser(profile.user);
@@ -52,14 +53,13 @@ export const UserProvider = ({ children }) => {
             setIsLoading(false);
             return;
           }
-        } catch (error) {
-          console.log('API authentication failed, falling back to local storage');
-          // Clear invalid token
+        } 
+        catch (error) {
+          // Clear invalid token and fall back to local storage
           await AsyncStorage.removeItem('authToken');
         }
       }
       
-      // Fallback to old AsyncStorage system for backwards compatibility
       const timeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('AsyncStorage timeout')), 3000)
       );
@@ -71,7 +71,6 @@ export const UserProvider = ({ children }) => {
       
       if (storedUsers) {
         const parsedUsers = JSON.parse(storedUsers);
-        // Filter out any invalid users without email
         const validUsers = parsedUsers.filter(user => user && user.email && typeof user.email === 'string');
         setUsers(validUsers);
       }
@@ -89,20 +88,22 @@ export const UserProvider = ({ children }) => {
           setIsAuthenticated(true);
         }
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error loading user data:', error);
-    } finally {
+    } 
+    finally {
       setIsLoading(false);
     }
   };
 
   const saveUsers = async (newUsers) => {
     try {
-      // Filter out any invalid users before saving
       const validUsers = newUsers.filter(user => user && user.email && typeof user.email === 'string');
       await AsyncStorage.setItem('users', JSON.stringify(validUsers));
       setUsers(validUsers);
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error saving users:', error);
     }
   };
@@ -113,8 +114,7 @@ export const UserProvider = ({ children }) => {
 
   const registerUser = async (userData) => {
     try {
-      // Use API service for registration
-      const { default: apiService } = await import('../services/apiService');
+      const { default: apiService } = await import('../services/ApiService');
       await apiService.init();
       
       const result = await apiService.register(userData.name, userData.email, userData.password);
@@ -122,11 +122,9 @@ export const UserProvider = ({ children }) => {
       
       if (result.success) {
         console.log('Setting current user:', result.user);
-        // Set the user and authentication state
         setCurrentUser(result.user);
         setIsAuthenticated(true);
         
-        // For backwards compatibility, also save to local storage
         const newUser = {
           ...result.user,
           avatar: userData.name ? userData.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'
@@ -137,7 +135,8 @@ export const UserProvider = ({ children }) => {
       }
       
       return result;
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error registering user:', error);
       return { success: false, error: error.message };
     }
@@ -145,9 +144,6 @@ export const UserProvider = ({ children }) => {
 
   const loginUser = async (email, password) => {
     try {
-      console.log('Login attempt with email:', email);
-      
-      // Validate input parameters
       if (!email || typeof email !== 'string') {
         return { success: false, error: 'Please provide a valid email address' };
       }
@@ -156,19 +152,16 @@ export const UserProvider = ({ children }) => {
         return { success: false, error: 'Please provide a valid password' };
       }
       
-      // Use API service for login
-      const { default: apiService } = await import('../services/apiService');
+      const { default: apiService } = await import('../services/ApiService');
       await apiService.init();
       
       const result = await apiService.login(email, password);
-      console.log('Login result:', result);
+
       
       if (result.success) {
-        // Set the user and authentication state
         setCurrentUser(result.user);
         setIsAuthenticated(true);
         
-        // For backwards compatibility, also save to local storage
         const newUser = {
           ...result.user,
           avatar: result.user.name ? result.user.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'
@@ -178,7 +171,8 @@ export const UserProvider = ({ children }) => {
         if (existingUserIndex >= 0) {
           updatedUsers = [...users];
           updatedUsers[existingUserIndex] = newUser;
-        } else {
+        } 
+        else {
           updatedUsers = [...users, newUser];
         }
         await saveUsers(updatedUsers);
@@ -186,7 +180,8 @@ export const UserProvider = ({ children }) => {
       }
       
       return result;
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error logging in user:', error);
       return { success: false, error: error.message };
     }
@@ -208,7 +203,8 @@ export const UserProvider = ({ children }) => {
       setIsAuthenticated(true);
 
       return { success: true, user };
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error logging in:', error);
       return { success: false, error: error.message };
     }
@@ -216,16 +212,15 @@ export const UserProvider = ({ children }) => {
 
   const logoutUser = async () => {
     try {
-      // Clear API token
-      const { default: apiService } = await import('../services/apiService');
+      const { default: apiService } = await import('../services/ApiService');
       apiService.setAuthToken(null);
       
-      // Clear local storage
       await AsyncStorage.removeItem('currentUserId');
       await AsyncStorage.removeItem('authToken');
       setCurrentUser(null);
       setIsAuthenticated(false);
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error logging out:', error);
     }
   };
@@ -243,7 +238,8 @@ export const UserProvider = ({ children }) => {
       }
       
       return { success: true };
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error updating user:', error);
       return { success: false, error: error.message };
     }

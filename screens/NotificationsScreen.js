@@ -16,7 +16,6 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 
-// Move SettingRow outside to prevent recreation on every render
 const SettingRow = memo(({ title, subtitle, value, onToggle, theme }) => {
   const settingRowStyle = {
     flexDirection: 'row',
@@ -77,11 +76,9 @@ const NotificationsScreen = ({ visible, onClose }) => {
     emailNotifications: false,
   });
   
-  // Animation values for smooth drag gestures
   const translateY = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
   
-  // Enhanced pan responder with immediate response
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (evt, gestureState) => {
       return Math.abs(gestureState.dy) > 3 && gestureState.dy > 0;
@@ -91,7 +88,7 @@ const NotificationsScreen = ({ visible, onClose }) => {
     },
     onPanResponderMove: (evt, gestureState) => {
       if (gestureState.dy > 0) {
-        translateY.setValue(gestureState.dy * 0.8); // Damping for smoother feel
+        translateY.setValue(gestureState.dy * 0.8);
       }
     },
     onPanResponderRelease: (evt, gestureState) => {
@@ -113,7 +110,6 @@ const NotificationsScreen = ({ visible, onClose }) => {
     },
   });
 
-  // Create stable callback functions to prevent Switch recreation
   const togglePushNotifications = useCallback((value) => {
     setSettings(prev => ({ ...prev, pushNotifications: value }));
   }, []);
@@ -155,12 +151,12 @@ const NotificationsScreen = ({ visible, onClose }) => {
         ]}
       >
         <SafeAreaView style={styles.safeArea}>
-          {/* Enhanced Drag Indicator */}
+          {/*drag indicator*/}
           <View style={styles.dragIndicatorContainer} {...panResponder.panHandlers}>
             <View style={[styles.dragIndicator, { backgroundColor: theme.colors.textTertiary }]} />
           </View>
         
-        {/* Header */}
+        {/*header*/}
         <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary, opacity: 0.7 }]}>Cancel</Text>
@@ -169,7 +165,11 @@ const NotificationsScreen = ({ visible, onClose }) => {
           <View style={styles.markAllButton} />
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Notification Settings</Text>
             <View style={[styles.settingsCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -249,8 +249,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 25,
+    paddingBottom: 10,
     borderBottomWidth: 1,
   },
   closeButton: {
@@ -280,6 +280,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 200,
   },
   section: {
     marginBottom: 24,

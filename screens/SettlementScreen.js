@@ -9,6 +9,7 @@ import {
   Modal,
   SafeAreaView
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../context/ApiDataContext';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
@@ -29,7 +30,6 @@ const SettlementScreen = ({ visible, onClose }) => {
     const userTransactions = getUserTransactions();
     const userGroups = getUserGroups();
     
-    // Calculate balances with each user
     const balancesByUser = {};
     const transactionsByUser = {};
 
@@ -48,10 +48,9 @@ const SettlementScreen = ({ visible, onClose }) => {
         }
 
         if (isCurrentUserPayer) {
-          // Current user paid, participant owes them
           balancesByUser[participantId] += splitAmount;
-        } else if (transaction.payerId === participantId) {
-          // Participant paid, current user owes them
+        } 
+        else if (transaction.payerId === participantId) {
           balancesByUser[participantId] -= splitAmount;
         }
 
@@ -68,7 +67,6 @@ const SettlementScreen = ({ visible, onClose }) => {
 
   const { balancesByUser, transactionsByUser } = calculateDetailedBalance();
 
-  // Group settlements by amount owed/owed to
   const settlements = Object.keys(balancesByUser)
     .map(userId => {
       const user = findUserById(userId);
@@ -79,13 +77,13 @@ const SettlementScreen = ({ visible, onClose }) => {
         userId,
         user,
         balance: Math.abs(balance),
-        owes: balance < 0, // Current user owes this person
-        owed: balance > 0, // This person owes current user
+        owes: balance < 0,
+        owed: balance > 0,
         transactions
       };
     })
-    .filter(settlement => settlement.balance > 0.01) // Filter out tiny amounts
-    .sort((a, b) => b.balance - a.balance); // Sort by amount descending
+    .filter(settlement => settlement.balance > 0.01)
+    .sort((a, b) => b.balance - a.balance);
 
   const handleSettleUp = (settlement) => {
     setSelectedSettlement(settlement);
@@ -103,14 +101,14 @@ const SettlementScreen = ({ visible, onClose }) => {
           text: 'Settle',
           onPress: async () => {
             try {
-              // Settle all transactions with this user
               for (const transaction of selectedSettlement.transactions) {
                 await settleTransaction(transaction.id);
               }
               
               Alert.alert('Success', 'Transactions settled successfully!');
               setSelectedSettlement(null);
-            } catch (error) {
+            } 
+            catch (error) {
               Alert.alert('Error', 'Failed to settle transactions');
             }
           }
@@ -174,22 +172,22 @@ const SettlementScreen = ({ visible, onClose }) => {
         {settlement.owes ? (
           <View style={styles.paymentButtons}>
             <TouchableOpacity
-              style={[styles.paymentMethodButton, { backgroundColor: '#6366F1' }]}
+              style={[styles.paymentMethodButton, { backgroundColor: theme.colors.primary }]}
               onPress={() => openPaymentApp('venmo', settlement.balance.toFixed(2), settlement.user?.name)}
             >
-              <Text style={styles.paymentMethodText}>📱 Venmo</Text>
+              <Text style={styles.paymentMethodText}>Venmo</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.paymentMethodButton, { backgroundColor: '#0066CC' }]}
               onPress={() => openPaymentApp('paypal', settlement.balance.toFixed(2), settlement.user?.name)}
             >
-              <Text style={styles.paymentMethodText}>💳 PayPal</Text>
+              <Text style={styles.paymentMethodText}>PayPal</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.paymentMethodButton, { backgroundColor: '#6B21A8' }]}
               onPress={() => openPaymentApp('zelle', settlement.balance.toFixed(2), settlement.user?.name)}
             >
-              <Text style={styles.paymentMethodText}>💰 Zelle</Text>
+              <Text style={styles.paymentMethodText}>Zelle</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -209,7 +207,7 @@ const SettlementScreen = ({ visible, onClose }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Transaction Details */}
+      {/*transaction details*/}
       <View style={styles.transactionDetails}>
         <Text style={styles.transactionDetailsTitle}>Transactions:</Text>
         {settlement.transactions.slice(0, 3).map((transaction, index) => (
@@ -241,14 +239,14 @@ const SettlementScreen = ({ visible, onClose }) => {
         <View style={[styles.modalHeader, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
           <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Settle Up</Text>
           <TouchableOpacity onPress={onClose}>
-            <Text style={[styles.closeButton, { color: theme.colors.textSecondary }]}>✕</Text>
+            <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
         <ScrollView style={[styles.modalContent, { backgroundColor: theme.colors.background }]}>
           {settlements.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateEmoji}>✅</Text>
+              <Ionicons name="checkmark-circle" size={64} color={theme.colors.success} style={{ marginBottom: 16 }} />
               <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>All Settled Up!</Text>
               <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
                 You don't have any outstanding balances with anyone.
@@ -285,7 +283,7 @@ const SettlementScreen = ({ visible, onClose }) => {
           )}
         </ScrollView>
 
-        {/* Settlement Confirmation Modal */}
+        {/*settlement confirmation modal*/}
         <Modal
           visible={!!selectedSettlement}
           transparent={true}
@@ -360,10 +358,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 64,
   },
-  emptyStateEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
+
   emptyStateTitle: {
     fontSize: 24,
     fontWeight: '700',
@@ -381,6 +376,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 8,
   },
   summaryTitle: {
     fontSize: 18,
@@ -412,6 +417,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 6,
   },
   settlementHeader: {
     flexDirection: 'row',
@@ -549,6 +564,14 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 400,
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 12,
   },
   confirmationTitle: {
     fontSize: 20,

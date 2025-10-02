@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
-import apiService from '../services/apiService';
+
+//services and context
+import apiService from '../services/ApiService';
 import { useUser } from './UserContext';
 
+//data context for managing groups and transactions
 const DataContext = createContext();
 
 export const useData = () => {
@@ -23,8 +26,9 @@ export const DataProvider = ({ children }) => {
   useEffect(() => {
     if (currentUser) {
       initializeData();
-    } else {
-      // If no user is authenticated, reset state
+    } 
+    else {
+      //if no user is authenticated, reset state
       setGroups([]);
       setTransactions([]);
       setIsLoading(false);
@@ -37,16 +41,18 @@ export const DataProvider = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
-      // Initialize API service
+      //initialize api service
       await apiService.init();
 
-      // Load user's groups
+      //load user's groups
       await loadGroups();
 
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error initializing data:', error);
       setError(error.message);
-    } finally {
+    } 
+    finally {
       setIsLoading(false);
     }
   };
@@ -54,17 +60,18 @@ export const DataProvider = ({ children }) => {
   const loadGroups = async () => {
     try {
       const response = await apiService.getGroups();
-      console.log('Groups response:', response);
-      // Backend now returns groups array directly
+
       if (Array.isArray(response)) {
         setGroups(response);
-      } else if (response.success && response.data && response.data.groups) {
-        // Fallback for old format
+      } 
+      else if (response.success && response.data && response.data.groups) {
         setGroups(response.data.groups);
-      } else {
+      } 
+      else {
         setGroups([]);
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error loading groups:', error);
       setGroups([]);
       handleApiError(error);
@@ -77,7 +84,8 @@ export const DataProvider = ({ children }) => {
       if (response.success) {
         return response.data.transactions || [];
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error loading transactions:', error);
       handleApiError(error);
       return [];
@@ -86,37 +94,38 @@ export const DataProvider = ({ children }) => {
 
   const handleApiError = (error) => {
     if (error.message.includes('Authentication failed')) {
-      // Handle authentication errors by logging out user
       Alert.alert(
         'Session Expired',
         'Please log in again to continue.',
         [{ text: 'OK', onPress: () => {/* Navigate to login */ } }]
       );
-    } else if (error.message.includes('Cannot connect')) {
+    } 
+    else if (error.message.includes('Cannot connect')) {
       setError('Cannot connect to server. Please check your internet connection.');
-    } else {
+    } 
+    else {
       setError(error.message);
     }
   };
 
-  // Group management functions
   const createGroup = async (groupData) => {
     try {
       setError(null);
       const response = await apiService.createGroup(groupData);
-      console.log('Create group response:', response);
+
       
       if (response.success) {
-        // Backend now returns group directly in response.group
         const newGroup = response.group || response.data?.group;
         if (newGroup) {
           setGroups(prevGroups => [newGroup, ...prevGroups]);
           return newGroup;
         }
-      } else {
+      } 
+      else {
         throw new Error(response.message || 'Failed to create group');
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error creating group:', error);
       handleApiError(error);
       throw error;
@@ -137,7 +146,8 @@ export const DataProvider = ({ children }) => {
         );
         return updatedGroup;
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error updating group:', error);
       handleApiError(error);
       throw error;
@@ -153,14 +163,14 @@ export const DataProvider = ({ children }) => {
         setGroups(prevGroups => prevGroups.filter(group => 
           group.id !== groupId && group._id !== groupId
         ));
-        // Also remove transactions for this group
         setTransactions(prevTransactions => 
           prevTransactions.filter(transaction => 
             transaction.group !== groupId && transaction.groupId !== groupId
           )
         );
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error deleting group:', error);
       handleApiError(error);
       throw error;
@@ -181,7 +191,8 @@ export const DataProvider = ({ children }) => {
         );
         return updatedGroup;
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error adding group member:', error);
       handleApiError(error);
       throw error;
@@ -202,7 +213,8 @@ export const DataProvider = ({ children }) => {
         );
         return updatedGroup;
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error removing group member:', error);
       handleApiError(error);
       throw error;
@@ -216,19 +228,18 @@ export const DataProvider = ({ children }) => {
       
       if (response.success) {
         setGroups(prevGroups => prevGroups.filter(group => group._id !== groupId));
-        // Also remove transactions for this group
         setTransactions(prevTransactions => 
           prevTransactions.filter(transaction => transaction.group !== groupId)
         );
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error leaving group:', error);
       handleApiError(error);
       throw error;
     }
   };
 
-  // Transaction management functions
   const createTransaction = async (transactionData) => {
     try {
       setError(null);
@@ -238,12 +249,12 @@ export const DataProvider = ({ children }) => {
         const newTransaction = response.data.transaction;
         setTransactions(prevTransactions => [newTransaction, ...prevTransactions]);
         
-        // Update group totals
         await loadGroups();
         
         return newTransaction;
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error creating transaction:', error);
       handleApiError(error);
       throw error;
@@ -263,12 +274,12 @@ export const DataProvider = ({ children }) => {
           )
         );
         
-        // Update group totals
         await loadGroups();
         
         return updatedTransaction;
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error updating transaction:', error);
       handleApiError(error);
       throw error;
@@ -285,10 +296,10 @@ export const DataProvider = ({ children }) => {
           prevTransactions.filter(transaction => transaction._id !== transactionId)
         );
         
-        // Update group totals
         await loadGroups();
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error deleting transaction:', error);
       handleApiError(error);
       throw error;
@@ -310,14 +321,14 @@ export const DataProvider = ({ children }) => {
         
         return updatedTransaction;
       }
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error marking transaction paid:', error);
       handleApiError(error);
       throw error;
     }
   };
 
-  // Helper functions for backward compatibility
   const getUserGroups = () => {
     if (!currentUser) return [];
     
@@ -327,7 +338,6 @@ export const DataProvider = ({ children }) => {
       }
       
       return group.members.some(member => {
-        // Handle different member structure possibilities
         const memberId = member.user?._id || member.user?.id || member._id || member.id;
         const currentUserId = currentUser.id || currentUser._id;
         
@@ -346,17 +356,41 @@ export const DataProvider = ({ children }) => {
     );
   };
 
-  const calculateUserBalance = () => {
-    if (!currentUser) return { totalOwed: 0, totalOwing: 0, netBalance: 0 };
+  const calculateUserBalance = useCallback(() => {
+    if (!currentUser || !Array.isArray(transactions)) {
+      return { owed: 0, owes: 0, net: 0 };
+    }
     
-    // This will be replaced with real API call later
-    // For now, return mock data for compatibility
+    let totalOwed = 0;
+    let totalOwing = 0;
+    
+    try {
+      transactions.forEach(transaction => {
+        if (!transaction || typeof transaction.amount !== 'number' || !Array.isArray(transaction.participants)) {
+          return;
+        }
+        
+        if (transaction.paidBy === currentUser.id) {
+          const splitAmount = transaction.amount / transaction.participants.length;
+          totalOwed += splitAmount * (transaction.participants.length - 1);
+        } 
+        else if (transaction.participants.includes(currentUser.id)) {
+          const splitAmount = transaction.amount / transaction.participants.length;
+          totalOwing += splitAmount;
+        }
+      });
+    } 
+    catch (error) {
+      console.warn('Error calculating user balance:', error);
+      return { owed: 0, owes: 0, net: 0 };
+    }
+    
     return {
-      totalOwed: 0,
-      totalOwing: 0,
-      netBalance: 0
+      owed: Math.max(0, totalOwed),
+      owes: Math.max(0, totalOwing),
+      net: totalOwed - totalOwing
     };
-  };
+  }, [currentUser, transactions]);
 
   const getGroupBalances = async (groupId) => {
     try {
@@ -365,14 +399,14 @@ export const DataProvider = ({ children }) => {
         return response.data.balances;
       }
       return [];
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error getting group balances:', error);
       handleApiError(error);
       return [];
     }
   };
 
-  // Clear all data (for logout)
   const clearData = () => {
     setGroups([]);
     setTransactions([]);
@@ -380,7 +414,6 @@ export const DataProvider = ({ children }) => {
     setIsLoading(false);
   };
 
-  // Retry failed operations
   const retry = () => {
     if (currentUser) {
       initializeData();
@@ -388,13 +421,11 @@ export const DataProvider = ({ children }) => {
   };
 
   const value = {
-    // State
     groups,
     transactions,
     isLoading,
     error,
 
-    // Group methods
     createGroup,
     updateGroup,
     deleteGroup,
@@ -404,7 +435,6 @@ export const DataProvider = ({ children }) => {
     getUserGroups,
     getGroupBalances,
 
-    // Transaction methods
     createTransaction,
     updateTransaction,
     deleteTransaction,
@@ -413,7 +443,6 @@ export const DataProvider = ({ children }) => {
     loadTransactions,
     calculateUserBalance,
 
-    // Utility methods
     clearData,
     retry,
     refresh: initializeData

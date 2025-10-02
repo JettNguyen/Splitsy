@@ -60,11 +60,6 @@ const groupMember = async (req, res, next) => {
     const Group = require('../models/Group');
     const groupId = req.params.id || req.params.groupId || req.body.group;
     
-    console.log('=== GROUP MEMBER MIDDLEWARE DEBUG ===');
-    console.log('GroupId:', groupId);
-    console.log('User ID:', req.user._id);
-    console.log('User:', req.user);
-    
     if (!groupId) {
       return res.status(400).json({
         success: false,
@@ -73,8 +68,6 @@ const groupMember = async (req, res, next) => {
     }
 
     const group = await Group.findById(groupId).populate('members.user', 'name email');
-    console.log('Found group:', group ? group.name : 'null');
-    console.log('Group members:', group ? group.members : 'no group');
     
     if (!group) {
       return res.status(404).json({
@@ -83,20 +76,14 @@ const groupMember = async (req, res, next) => {
       });
     }
 
-    console.log('Calling isMember with user ID:', req.user._id);
     const isMemberResult = group.isMember(req.user._id);
-    console.log('isMember result:', isMemberResult);
     
     if (!isMemberResult) {
-      console.log('Access denied - user is not a member');
       return res.status(403).json({
         success: false,
         message: 'Access denied - not a member of this group'
       });
     }
-    
-    console.log('Access granted - user is a member');
-    console.log('=== END GROUP MEMBER MIDDLEWARE DEBUG ===');
 
     req.group = group;
     next();

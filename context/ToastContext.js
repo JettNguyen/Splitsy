@@ -20,7 +20,6 @@ export const ToastProvider = ({ children }) => {
     
     setToasts(prev => [...prev, newToast]);
 
-    // Auto remove after duration + animation time
     setTimeout(() => {
       hideToast(id);
     }, duration + 600);
@@ -33,7 +32,6 @@ export const ToastProvider = ({ children }) => {
       )
     );
 
-    // Remove from array after animation
     setTimeout(() => {
       setToasts(prev => prev.filter(toast => toast.id !== id));
     }, 300);
@@ -61,7 +59,7 @@ export const ToastProvider = ({ children }) => {
           type={toast.type}
           duration={toast.duration}
           onHide={() => hideToast(toast.id)}
-          style={{ top: 50 + (index * 70) }} // Stack multiple toasts
+          style={{ top: 50 + (index * 70) }}
         />
       ))}
     </ToastContext.Provider>

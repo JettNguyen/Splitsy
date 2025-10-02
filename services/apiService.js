@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+//api service for handling backend communication
+//backend server url (using the correct ip and port)
 const API_BASE_URL = __DEV__ ? 'http://192.168.0.38:3000/api' : 'https://your-production-api.com/api';
 
 class ApiService {
@@ -8,7 +10,7 @@ class ApiService {
     this.token = null;
   }
 
-  // Initialize the service and load stored token
+  //initialize the service and load stored token
   async init() {
     try {
       const token = await AsyncStorage.getItem('authToken');
@@ -20,7 +22,7 @@ class ApiService {
     }
   }
 
-  // Set authentication token
+  //set authentication token
   setAuthToken(token) {
     this.token = token;
     if (token) {
@@ -30,7 +32,7 @@ class ApiService {
     }
   }
 
-  // Get authentication headers
+  //get authentication headers
   getAuthHeaders() {
     const headers = {
       'Content-Type': 'application/json',
@@ -43,7 +45,7 @@ class ApiService {
     return headers;
   }
 
-  // Generic API call method
+  //generic api call method
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     
@@ -59,7 +61,15 @@ class ApiService {
     }
 
     try {
-      const response = await fetch(url, config);
+      // Add timeout wrapper to prevent hanging requests
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out')), 15000)
+      );
+      
+      const response = await Promise.race([
+        fetch(url, config),
+        timeoutPromise
+      ]);
       
       // Handle different response types
       const contentType = response.headers.get('content-type');
@@ -90,8 +100,19 @@ class ApiService {
 
       return data;
     } catch (error) {
+      console.error(`API Error [${config.method} ${url}]:`, error.message);
+      console.error('Request details:', {
+        url,
+        baseURL: this.baseURL,
+        method: config.method,
+        hasAuth: !!this.token
+      });
+      
       if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
         throw new Error('Cannot connect to server. Please check your internet connection.');
+      }
+      if (error.message.includes('timed out') || error.message.includes('Request timed out')) {
+        throw new Error('Network request timed out');
       }
       throw error;
     }

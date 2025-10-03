@@ -8,16 +8,13 @@ A React Native app for tracking shared expenses with receipt scanning and automa
 - **Cross-Platform**: iOS & Android support
 - **Dark/Light Mode**: Theme switching
 - **Receipt Scanning**: OCR-powered data extraction
-- **Group Management**: Create and manage expense groups
-- **Smart Splitting**: Automatic split calculations
-- **Balance Tracking**: Real-time balance summaries
+- **Friend/Group Management**: Create and manage friends & groups
 
 ## Quick Start
 
 ### Prerequisites
 - **Node.js** 18.0+
 - **Expo Go** app on your phone
-- **MongoDB Atlas account** (free tier available) OR **MongoDB installed locally**
 
 ### Setup
 
@@ -30,9 +27,12 @@ cd Splitsy
 #install dependencies
 npm install
 npm install expo
+cd backend
+npm install
 ```
 
 #### 2. Use .env file (provided by me)
+- Ensure it is named ".env"
 
 #### 3. Start the Application
 ```bash

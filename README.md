@@ -32,7 +32,7 @@ npm install
 ```
 
 #### 2. Use .env file (provided by me)
-- Ensure it is named ".env"
+- Ensure it is named `.env` with the dot
 
 #### 3. Start the Application
 ```bash
@@ -42,7 +42,7 @@ node server.js
 
 #terminal 2: start frontend
 cd ..
-npx expo start --clear
+npm start
 ```
 
 #### 4. Connect Your Device

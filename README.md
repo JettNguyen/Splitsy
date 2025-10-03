@@ -17,37 +17,63 @@ A React Native app for tracking shared expenses with receipt scanning and automa
 ### Prerequisites
 - **Node.js** 18.0+
 - **Expo Go** app on your phone
+- **MongoDB Atlas account** (free tier available) OR **MongoDB installed locally**
 
 ### Setup
+
+#### 1. Clone and Install Dependencies
 ```bash
-#clone and install
+#clone the repository
 git clone https://github.com/JettNguyen/Splitsy.git
 cd Splitsy
-npm install --legacy-peer-deps
 
-#start backend
-cd backend
+#install dependencies
 npm install
-node server.js
-
-#start frontend
-cd .. 
-npm start
+npm install expo
 ```
 
-Scan the QR code with Expo Go and you're ready!
+#### 2. Use .env file (provided by me)
+
+#### 3. Start the Application
+```bash
+#terminal 1: start backend server
+cd backend
+node server.js
+
+#terminal 2: start frontend
+cd ..
+npx expo start --clear
+```
+
+#### 4. Connect Your Device
+- Scan the QR code with Expo Go app
 
 ## Tech Stack
 
 - **Frontend**: React Native, Expo
 - **Backend**: Node.js, Express, MongoDB
+- **Database**: MongoDB Atlas (cloud) or MongoDB (local)
+- **Authentication**: JWT tokens
 - **OCR**: Receipt scanning and data extraction
 - **Icons**: Expo Vector Icons (Ionicons)
 
-## Development
+## API Endpoints
 
-### Available Scripts
-- `npm start` - Start Expo development server
-- `npm run android` - Open on Android
-- `npm run ios` - Open on iOS
-- `npm run web` - Open in web browser
+### Authentication
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
+- `GET /api/auth/profile` - Get user profile
+
+### Groups
+- `GET /api/groups` - Get user's groups
+- `POST /api/groups` - Create new group
+- `PUT /api/groups/:id` - Update group
+- `DELETE /api/groups/:id` - Delete group
+- `POST /api/groups/:id/members` - Add member to group
+- `DELETE /api/groups/:id/members/:userId` - Remove member from group
+
+### Transactions
+- `GET /api/transactions/:groupId` - Get group transactions
+- `POST /api/transactions` - Create new transaction
+- `PUT /api/transactions/:id` - Update transaction
+- `DELETE /api/transactions/:id` - Delete transaction

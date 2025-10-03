@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Alert } from 'react-native';
 
 //services and context
-import apiService from '../services/ApiService';
+import apiService from '../services/apiService';
 import { useUser } from './UserContext';
 
 //data context for managing groups and transactions

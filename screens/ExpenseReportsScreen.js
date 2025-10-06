@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/ApiDataContext';
 import { useUser } from '../context/UserContext';

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiService from '../services/apiService';
 
 //user context for managing authentication and user data
 const UserContext = createContext();
@@ -41,8 +42,7 @@ export const UserProvider = ({ children }) => {
       const token = await AsyncStorage.getItem('authToken');
       if (token) {
         try {
-          //import apiservice dynamically
-          const { default: apiService } = await import('../services/apiService');
+          //initialize apiservice
           await apiService.init();
           
           //try to get user profile from api
@@ -114,7 +114,6 @@ export const UserProvider = ({ children }) => {
 
   const registerUser = async (userData) => {
     try {
-      const { default: apiService } = await import('../services/apiService');
       await apiService.init();
       
       const result = await apiService.register(userData.name, userData.email, userData.password);
@@ -152,7 +151,6 @@ export const UserProvider = ({ children }) => {
         return { success: false, error: 'Please provide a valid password' };
       }
       
-      const { default: apiService } = await import('../services/apiService');
       await apiService.init();
       
       const result = await apiService.login(email, password);
@@ -212,7 +210,6 @@ export const UserProvider = ({ children }) => {
 
   const logoutUser = async () => {
     try {
-      const { default: apiService } = await import('../services/apiService');
       apiService.setAuthToken(null);
       
       await AsyncStorage.removeItem('currentUserId');

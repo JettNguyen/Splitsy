@@ -8,9 +8,9 @@ import {
   TextInput,
   Alert,
   Modal,
-  SafeAreaView,
   Switch
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
 

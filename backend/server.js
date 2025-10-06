@@ -177,12 +177,13 @@ app.use('*', (req, res) => {
 // Start server
 const startServer = async () => {
   await connectDB();
-  
+  const localIP = '10.20.0.192'; // Replace this with your actual local IP address
+
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     console.log(`📱 Health check: http://localhost:${PORT}/health`);
     console.log(`📊 API Base URL: http://localhost:${PORT}/api`);
-    console.log(`🌐 Network access: http://192.168.0.38:${PORT}/api`);
+    console.log(`🌐 Network access: http://${localIP}:${PORT}/api`);  // Use the hardcoded IP
   });
 
   server.on('error', (error) => {

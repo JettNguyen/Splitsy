@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet } from 'react-native';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
+import apiService from '../services/apiService';
 
 import { useData } from '../context/ApiDataContext';
 // import { useUser } from '../context/UserContext'; //for future friends management
@@ -40,16 +41,47 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
     setGroups(sanitizedGroups);
   }, [userGroups]);
 
-  const handleAddFriend = () => {
-    if (friendEmail.trim()) {
-      //friends API integration pending - ready for backend implementation
-      //const result = await sendFriendRequest(friendEmail);
-      
-      setFriendEmail('');
-      setShowAddFriend(false);
-      Alert.alert('Success', 'Friend request sent!');
+  const handleAddFriend = async () => {
+  if (!friendEmail.trim()) {
+    alert('Please enter a valid email.');
+    return;
+  }
+
+  try {
+    const result = await apiService.addFriend(friendEmail);
+
+    if (result.success) {
+      // Check if the friends array exists and has changed
+      if (result.user && Array.isArray(result.user.friends)) {
+        setFriends(result.user.friends); // update UI
+        alert(`${friendEmail} has been added to your friends list!`);
+      } else {
+        alert('Friend added, but could not fetch updated friends list.');
+      }
+    } else {
+      // Show backend-provided error or fallback
+      alert(result.message || result.error || 'Failed to add friend.');
+    }
+  } catch (err) {
+    console.error('Add friend error:', err);
+    alert('An unexpected error occurred. Please try again.');
+  }
+};
+
+React.useEffect(() => {
+  const fetchFriends = async () => {
+    try {
+      const result = await apiService.getFriends(); // make sure you have this API method
+      if (result.success && Array.isArray(result.friends)) {
+        setFriends(result.friends);
+      }
+    } catch (err) {
+      console.error('Error fetching friends:', err);
     }
   };
+
+  fetchFriends();
+}, []); // empty dependency array = run once on mount
 
   const handleCreateGroup = () => {
     if (!groupName.trim()) {
@@ -235,7 +267,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
             <FlatList
               data={friends}
               renderItem={renderFriendItem}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item._id}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.listContent}
             />

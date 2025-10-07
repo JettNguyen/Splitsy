@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 //api service for handling backend communication
 //backend server url (using the correct ip and port)
-const API_BASE_URL = __DEV__ ? 'http://10.20.0.192:3000/api' : 'https://your-production-api.com/api'; // change the second url to your local ip address
+const API_BASE_URL = __DEV__ ? 'http://10.20.0.190:3000/api' : 'https://your-production-api.com/api'; // change the second url to your local ip address
 
 class ApiService {
   constructor() {
@@ -295,6 +295,21 @@ class ApiService {
       headers: { 'Content-Type': 'application/json' } // Don't include auth for health check
     });
   }
+
+  // add friend method
+  async addFriend(friendEmail) {
+  return await this.makeRequest('/users/add-friend', {
+    method: 'POST',
+    body: { email: friendEmail }
+  });
+}
+ // get friends method
+  async getFriends() {
+    return await this.makeRequest('/users/friends', {
+      method: 'GET',
+    });
+  }
+
 }
 
 // Create singleton instance

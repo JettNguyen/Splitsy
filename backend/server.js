@@ -11,6 +11,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const authRoutes = require('./routes/auth');
 const groupRoutes = require('./routes/groups');
 const transactionRoutes = require('./routes/transactions');
+const friendsRoutes = require('./routes/friends');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -60,7 +61,7 @@ const corsOptions = {
       'http://localhost:8081',
       'http://localhost:8082',
       'http://localhost:19006', // Expo web
-      'exp://192.168.0.38:8081', // Expo development
+      'exp://10.20.0.190:8081', // Expo development
       'exp://192.168.0.38:8082',
       'http://192.168.0.38:8081', // Direct IP access
       'http://192.168.0.38:8082',
@@ -98,6 +99,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/users', friendsRoutes);
 
 // Global error handler
 app.use((error, req, res, next) => {
@@ -177,7 +179,7 @@ app.use('*', (req, res) => {
 // Start server
 const startServer = async () => {
   await connectDB();
-  const localIP = '10.20.0.192'; // Replace this with your actual local IP address
+  const localIP = '10.20.0.190'; // Replace this with your actual local IP address
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);

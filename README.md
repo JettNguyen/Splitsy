@@ -39,6 +39,9 @@ npm install
 #terminal 1: start backend server
 cd backend
 node server.js
+# OR use this: backend server that refreshes upon every change
+npm install -g nodemon
+nodemon server. js
 
 #terminal 2: start frontend
 cd ..

@@ -5,7 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 //route imports
 const authRoutes = require('./routes/auth');
@@ -13,13 +13,8 @@ const groupRoutes = require('./routes/groups');
 const transactionRoutes = require('./routes/transactions');
 const friendsRoutes = require('./routes/friends');
 
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/groups', groupRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/users', friendsRoutes);
-
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
 //connect to mongodb
@@ -63,11 +58,12 @@ const corsOptions = {
     
     const allowedOrigins = [
       process.env.FRONTEND_URL,
+      `http://${process.env.IP_ADDRESS}:${process.env.PORT}`,
       'http://localhost:8080',
       'http://localhost:8081',
       'http://localhost:8082',
       'http://localhost:19006', // Expo web
-      'exp://10.20.0.190:8081', // Expo development
+      `exp://${process.env.IP_ADDRESS}:8081`,
       'exp://192.168.0.38:8082',
       'http://192.168.0.38:8081', // Direct IP access
       'http://192.168.0.38:8082',
@@ -90,6 +86,12 @@ app.use(cors(corsOptions));
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/groups', groupRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/users', friendsRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -179,13 +181,12 @@ app.use('*', (req, res) => {
 // Start server
 const startServer = async () => {
   await connectDB();
-  const localIP = '10.20.0.190'; // Replace this with your actual local IP address
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     console.log(`📱 Health check: http://localhost:${PORT}/health`);
     console.log(`📊 API Base URL: http://localhost:${PORT}/api`);
-    console.log(`🌐 Network access: http://${localIP}:${PORT}/api`);  // Use the hardcoded IP
+    console.log(`🌐 Network access: http://${process.env.IP_ADDRESS}:${PORT}/api`);  // Use the hardcoded IP
   });
 
   server.on('error', (error) => {

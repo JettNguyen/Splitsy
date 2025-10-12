@@ -2,7 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 //api service for handling backend communication
 //backend server url (using the correct ip and port)
-const API_BASE_URL = __DEV__ ? 'http://10.20.0.190:3000/api' : 'https://your-production-api.com/api'; // change the second url to your local ip address
+import { IP_ADDRESS, PORT } from '@env';
+const API_BASE_URL = __DEV__ 
+  ? `http://${IP_ADDRESS}:${PORT}/api`
+  : 'https://your-production-api.com/api';
+
 
 class ApiService {
   constructor() {
@@ -299,7 +303,7 @@ class ApiService {
   // add friend method
   async addFriend(friendEmail) {
   return await this.makeRequest('/users/add-friend', { // bridge between frontend and backend
-    method: 'POST', // http://10.20.0.190:3000/api/users/add-friend
+    method: 'POST', 
     body: { email: friendEmail }
   });
 }

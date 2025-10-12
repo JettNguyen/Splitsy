@@ -13,6 +13,12 @@ const groupRoutes = require('./routes/groups');
 const transactionRoutes = require('./routes/transactions');
 const friendsRoutes = require('./routes/friends');
 
+// API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/groups', groupRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/users', friendsRoutes);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -94,12 +100,6 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development'
   });
 });
-
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/groups', groupRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/users', friendsRoutes);
 
 // Global error handler
 app.use((error, req, res, next) => {

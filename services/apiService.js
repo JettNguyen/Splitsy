@@ -298,8 +298,8 @@ class ApiService {
 
   // add friend method
   async addFriend(friendEmail) {
-  return await this.makeRequest('/users/add-friend', {
-    method: 'POST',
+  return await this.makeRequest('/users/add-friend', { // bridge between frontend and backend
+    method: 'POST', // http://10.20.0.190:3000/api/users/add-friend
     body: { email: friendEmail }
   });
 }

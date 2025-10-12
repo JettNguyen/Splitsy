@@ -5,7 +5,7 @@ const addFriend = async (req, res) => {
     const { email } = req.body;
 
     // Find the friend by email
-    const friend = await User.findOne({ email });
+    const friend = await User.findOne({ email }); // touches the database
 
     if (!friend) {
       return res.status(404).json({ success: false, message: 'Friend not found' });
@@ -30,7 +30,7 @@ const addFriend = async (req, res) => {
     res.json({ success: true, message: 'Friend added successfully', user: populatedUser });
   } catch (error) {
     console.error('Add friend error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ success: false, message: 'Server error' }); // sends the result back to frontend
   }
 };
 

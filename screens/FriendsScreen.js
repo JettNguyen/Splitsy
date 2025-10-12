@@ -48,7 +48,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
   }
 
   try {
-    const result = await apiService.addFriend(friendEmail);
+    const result = await apiService.addFriend(friendEmail); // goes to apiService.js, addFriend method
 
     if (result.success) {
       // Check if the friends array exists and has changed

@@ -13,7 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 // ios sim:      http://127.0.0.1:5000/ocr
 // android emu:  http://10.0.2.2:5000/ocr
 // real device:  http://<your-computer-ip>:5000/ocr
-const BACKEND_URL = 'http://127.0.0.1:5000/ocr';
+const BACKEND_URL = 'http://192.168.1.242:5000/ocr';
 
 const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   const { theme } = useTheme();
@@ -22,7 +22,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   const [capturedImage, setCapturedImage] = useState(null);
   const [showEditView, setShowEditView] = useState(false);
   const [extractedData, setExtractedData] = useState({
-    merchant: '', date: '', total: '', items: []
+    merchant: '', date: '', subtotal: '', tax: '', service_charge: '', total: '', items: []
   });
   const [savedInfo, setSavedInfo] = useState({ saved_json_path: '', saved_image_path: '' });
 
@@ -32,7 +32,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       setIsProcessing(false);
       setCapturedImage(null);
       setShowEditView(false);
-      setExtractedData({ merchant: '', date: '', total: '', items: [] });
+      setExtractedData({ merchant: '', date: '', subtotal: '', tax: '', service_charge: '', total: '', items: [] });
       setSavedInfo({ saved_json_path: '', saved_image_path: '' });
     }
   }, [visible]);
@@ -74,9 +74,12 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       setExtractedData({
         merchant: data.merchant || 'unknown merchant',
         date: data.date || new Date().toLocaleDateString(),
+        subtotal: data.subtotal || '0.00',
+        tax: data.tax || '0.00',
+        service_charge: data.service_charge || '0.00',
         total: data.total || '0.00',
         items: Array.isArray(data.items)
-          ? data.items.map(i => ({ name: i.name || '', price: i.price?.toString() || '' }))
+          ? data.items.map(i => ({ name: i.name || '', price: i.price?.toString() || '', qty: i.qty || 1 }))
           : []
       });
       setSavedInfo({
@@ -84,6 +87,9 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
         saved_image_path: data.saved_image_path || ''
       });
 
+
+
+      
       setShowEditView(true);
     } catch (e) {
       console.error('ocr upload error:', e);
@@ -129,18 +135,66 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   };
 
   // edit helpers
-  const addItem = () =>
-    setExtractedData(p => ({ ...p, items: [...p.items, { name: '', price: '' }] }));
+  // const addItem = () =>
+  //   setExtractedData(p => ({ ...p, items: [...p.items, { name: '', price: '', qty: 1 }] }));
 
+  const addItem = () =>
+  setExtractedData(prev => {
+    const newItem = { name: '', price: '', qty: 1 };
+
+    // subtotal doesn’t change yet since no price entered
+    return { ...prev, items: [...prev.items, newItem] };
+  });
+
+  // const removeItem = (i) =>
+  //   setExtractedData(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }));
+
+  //also updates subtotal value 
   const removeItem = (i) =>
-    setExtractedData(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }));
+  setExtractedData(prev => {
+    const removedItem = prev.items[i];
+    const qty = removedItem && !isNaN(parseInt(removedItem.qty)) ? parseInt(removedItem.qty) : 1;
+    const price = removedItem && !isNaN(parseFloat(removedItem.price)) ? parseFloat(removedItem.price) : 0;
+
+    const updatedItems = prev.items.filter((_, idx) => idx !== i);
+    const newSubtotal = Math.max(0, (parseFloat(prev.subtotal) || 0) - qty * price);
+
+    return { ...prev, items: updatedItems, subtotal: newSubtotal.toFixed(2) };
+  });
+
+  // const updateItem = (i, field, val) =>
+  //   setExtractedData(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [field]: val } : it) }));
 
   const updateItem = (i, field, val) =>
-    setExtractedData(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [field]: val } : it) }));
+  setExtractedData(prev => {
+    const updatedItems = prev.items.map((it, idx) =>
+      idx === i ? { ...it, [field]: val } : it
+    );
 
+    // recompute subtotal from scratch (simpler + safer)
+    let subtotal = 0;
+    for (const item of updatedItems) {
+      const q = !isNaN(parseInt(item.qty)) ? parseInt(item.qty) : 1;
+      const p = !isNaN(parseFloat(item.price)) ? parseFloat(item.price) : 0;
+      subtotal += q * p;
+    }
+
+    const tax = !isNaN(parseFloat(prev.tax)) ? parseFloat(prev.tax) : 0;
+    const newTotal = (subtotal + tax).toFixed(2);
+
+    return {
+      ...prev,
+      items: updatedItems,
+      subtotal: subtotal.toFixed(2),
+      total: newTotal
+    };
+  });
+
+  
   // confirm and pass back
   const handleConfirm = () => {
     if (!extractedData.merchant.trim()) return Alert.alert('missing', 'please enter a merchant');
+    if (!extractedData.tax.trim()) return Alert.alert('missing', 'please enter a tax');
     if (!extractedData.total.trim()) return Alert.alert('missing', 'please enter a total');
 
     onReceiptScanned({ ...extractedData, _saved: savedInfo });
@@ -261,6 +315,30 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
               </View>
 
               <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Subtotal</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
+                  value={extractedData.subtotal}
+                  onChangeText={(t) => setExtractedData(p => ({ ...p, subtotal: t }))}
+                  placeholder="$0.00"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Tax</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
+                  value={extractedData.tax}
+                  onChangeText={(t) => setExtractedData(p => ({ ...p, tax: t }))}
+                  placeholder="$0.00"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
                 <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Total</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
@@ -283,6 +361,14 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
 
               {extractedData.items.map((item, idx) => (
                 <View key={idx} style={styles.itemRow}>
+                  <TextInput
+                  style={[styles.input, styles.itemQtyInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
+                  value={String(item.qty)}
+                  onChangeText={(t) => updateItem(idx, 'qty', t.replace(/[^0-9]/g, ''))} // allow only numbers
+                  placeholder="Qty"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="numeric"
+                />
                   <TextInput
                     style={[styles.input, styles.itemNameInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
                     value={item.name}
@@ -462,6 +548,7 @@ const styles = StyleSheet.create({
 
   itemNameInput: { flex: 2 },
   itemPriceInput: { flex: 1 },
+  itemQtyInput: { flex: 0.5 },
 
   removeButton: { 
     backgroundColor: '#EF4444', 

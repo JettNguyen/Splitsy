@@ -11,7 +11,7 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 
 # set tesseract path if needed (windows only)
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = "/opt/homebrew/bin/tesseract"
 
 app = Flask(__name__)
 CORS(app)
@@ -38,6 +38,8 @@ def parse_text(text: str):
     items = []
     tax = None
     total = None
+    subtotal = None
+    service_charge = None
     merchant = ""
     date = ""
 
@@ -69,14 +71,25 @@ def parse_text(text: str):
 
         amount = float(m.group().replace("$", "").replace(",", "").replace(" ", ""))
 
-        if any(k in lower for k in ["subtotal", "subtot"]):
+        # if any(k in lower for k in ["subtotal", "subtot"]):
+        #     continue
+        # if "tax" in lower:
+        #     tax = amount
+        #     continue
+        # if any(k in lower for k in ["total", "balance", "amount due", "grand total"]) and "sub" not in lower:
+        #     total = amount
+        #     continue
+
+        if any(keyword in lower for keyword in ["subtotal", "subtot", "tax", "total", "fee", "charge", "surcharge", "balance"]):
+            if "tax" in lower:
+                tax = amount
+            elif any(k in lower for k in ["total", "balance", "amount due", "amount owed", "grand total", "amt"]):
+                #ensure it's not subtotal
+                if "sub" not in lower:
+                    total = amount
+            #don't add category values as item
             continue
-        if "tax" in lower:
-            tax = amount
-            continue
-        if any(k in lower for k in ["total", "balance", "amount due", "grand total"]) and "sub" not in lower:
-            total = amount
-            continue
+
 
         name_part = clean_line[:m.start()].strip(" -:")
         qty = 1
@@ -93,7 +106,13 @@ def parse_text(text: str):
             })
 
     subtotal = round(sum(i["amount"] for i in items), 2)
-    service_charge = round((total or 0) - subtotal - (tax or 0), 2) if total is not None else None
+    #service_charge = round((total or 0) - subtotal - (tax or 0), 2) if total is not None else None
+    
+    #calculate service charges not including tax
+    if total is not None:
+        service_charge = round(total - subtotal - (tax or 0.0), 2)
+    else:
+        service_charge = None
 
     # set defaults if missing
     if not merchant:
@@ -115,8 +134,11 @@ def parse_text(text: str):
         "merchant": merchant,
         "date": date,
         "total": f"{(total or subtotal):.2f}",
-        "items": [{"name": i["description"], "price": f"{i['amount']:.2f}"} for i in items[:50]],
-        "_raw": {"subtotal": subtotal, "tax": tax, "service_charge": service_charge}
+        "items": [{"name": i["description"], "price": f"{i['amount']:.2f}", "qty": int(i.get("qty", 1))} for i in items[:50]],
+        "_raw": {"subtotal": subtotal, "tax": tax, "service_charge": service_charge},
+        "subtotal": f"{subtotal:.2f}",
+        "tax": f"{(tax if tax is not None else 0.0):.2f}",
+        "service_charge": f"{(service_charge if service_charge is not None else 0.0):.2f}"
     }
     return parsed
 
@@ -157,7 +179,7 @@ def ocr():
                 {
                     "merchant": parsed["merchant"],
                     "date": parsed["date"],
-                    "items": [{"qty": 1, "description": it["name"], "amount": float(it["price"])} for it in parsed["items"]],
+                    "items": [{"qty": int(it.get("qty", 1)), "description": it["name"], "amount": float(it["price"])} for it in parsed["items"]],
                     "subtotal": parsed["_raw"]["subtotal"],
                     "tax": parsed["_raw"]["tax"],
                     "service_charge": parsed["_raw"]["service_charge"],

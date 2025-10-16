@@ -48,19 +48,14 @@ npm start
 
 cd backend/python_ocr
 
-python -m venv venv
+python -m venv venv       #start python environment
 
-venv\Scripts\activate        # windows
--source venv/bin/activate   # mac/linux
+venv\Scripts\activate        # windows  
+source venv/bin/activate     # mac/linux
+                             
+pip install flask flask-cors pillow pytesseract werkzeug    #install dependencies
 
--install dependencies
-pip install flask flask-cors pillow pytesseract werkzeug
-
--optional: save them for later
-pip freeze > requirements.txt
-
--run the flask server
-python main.py
+python main.py      #run the flask server
 ```
 
 #### 4. Connect Your Device

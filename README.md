@@ -44,6 +44,23 @@ node server.js
 cd ..
 npm start
 ```
+#terminal 3: start python ocr microservice
+
+cd backend/python_ocr
+
+python -m venv venv
+
+venv\Scripts\activate        # windows
+-source venv/bin/activate   # mac/linux
+
+-install dependencies
+pip install flask flask-cors pillow pytesseract werkzeug
+
+-optional: save them for later
+pip freeze > requirements.txt
+
+-run the flask server
+python main.py
 
 #### 4. Connect Your Device
 - Scan the QR code with Expo Go app

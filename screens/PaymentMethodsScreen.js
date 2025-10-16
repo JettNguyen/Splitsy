@@ -8,7 +8,6 @@ import {
   Modal,
   TextInput,
   Alert,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   Keyboard,
@@ -16,6 +15,7 @@ import {
   PanResponder,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 

@@ -2,12 +2,12 @@ import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Alert,
   Animated
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 // Screen components
 import AuthScreen from './screens/AuthScreen';
@@ -437,16 +437,18 @@ function MainApp() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <UserProvider>
-        <DataProvider>
-          <NotificationProvider>
-            <ToastProvider>
-              <MainApp />
-            </ToastProvider>
-          </NotificationProvider>
-        </DataProvider>
-      </UserProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <UserProvider>
+          <DataProvider>
+            <NotificationProvider>
+              <ToastProvider>
+                <MainApp />
+              </ToastProvider>
+            </NotificationProvider>
+          </DataProvider>
+        </UserProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

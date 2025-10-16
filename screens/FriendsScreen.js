@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   TextInput,
   Alert,
   FlatList
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet } from 'react-native';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
@@ -321,7 +321,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['left', 'right', 'bottom']}>
       {/*header*/}
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.colors.text }]}>Friends & Groups</Text>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,13 +16,37 @@ import { useUser } from '../context/UserContext';
 
 const GroupManagementScreen = ({ visible, onClose, groupId }) => {
   const { theme } = useTheme();
-  const { getUserGroups, getUserTransactions, updateGroup, deleteGroup } = useData();
+  const { getUserGroups, getUserTransactions, updateGroup, deleteGroup, loadTransactions, getGroupBalances, addGroupMember } = useData();
   const { currentUser, users } = useUser();
   
   const allGroups = getUserGroups();
   const group = allGroups.find(g => g && g.id === groupId);
   const allUsers = users;
-  const groupTransactions = getUserTransactions().filter(t => t.groupId === groupId);
+  // local state for up-to-date transactions and balances for this group
+  const [groupTransactions, setGroupTransactions] = useState([]);
+  const [groupBalances, setGroupBalances] = useState([]);
+
+  // initialize local transactions and balances when modal opens
+  useEffect(() => {
+    let mounted = true;
+    if (groupId) {
+      // Load transactions and balances for this group when the modal opens.
+      (async () => {
+        try {
+          const txResp = await loadTransactions(groupId);
+          if (mounted && Array.isArray(txResp)) setGroupTransactions(txResp);
+
+          const balances = await getGroupBalances(groupId);
+          if (mounted && balances) setGroupBalances(balances || []);
+        } catch (err) {
+          // ignore - DataContext handles errors
+          console.warn('Failed to load group data', err.message || err);
+        }
+      })();
+    }
+
+    return () => { mounted = false; };
+  }, [groupId]);
   
   const [editMode, setEditMode] = useState(false);
   const [groupName, setGroupName] = useState(group?.name || '');
@@ -93,8 +117,8 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
     }
 
     try {
-      const updatedMembers = [...group.members, existingUser.id];
-      await updateGroup(groupId, { members: updatedMembers });
+      // Use DataContext.addGroupMember which calls POST /groups/:id/members
+      await addGroupMember(groupId, newMemberEmail.trim());
       setNewMemberEmail('');
       setShowAddMember(false);
       Alert.alert('Success', 'Member added successfully');
@@ -251,6 +275,31 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
                 value={stats.transactionCount}
               />
             </View>
+          </View>
+
+          {/* Recent transactions for this group */}
+          <View style={styles.transactionsSection}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Transactions</Text>
+            {groupTransactions.length === 0 ? (
+              <Text style={[{ color: theme.colors.textSecondary, marginTop: 8 }]}>No transactions yet</Text>
+            ) : (
+              groupTransactions.slice(0, 6).map(tx => (
+                <View key={tx._id || tx.id} style={[styles.transactionRow, { backgroundColor: theme.colors.card }]}>
+                  <View style={styles.transactionLeft}>
+                    <View style={[styles.memberAvatar, { backgroundColor: theme.colors.primary }]}> 
+                      <Text style={styles.memberAvatarText}>{(tx.payer?.name || 'U').charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.transactionInfo}>
+                      <Text style={[styles.memberName, { color: theme.colors.text }]}>{tx.description}</Text>
+                      <Text style={[styles.memberEmail, { color: theme.colors.textSecondary }]}>{tx.payer?.name || tx.payer?.email}</Text>
+                    </View>
+                  </View>
+                  <View>
+                    <Text style={[styles.statValue, { color: theme.colors.text }]}>{`$${(tx.amount || 0).toFixed(2)}`}</Text>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
 
           <View style={styles.membersSection}>

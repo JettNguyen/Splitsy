@@ -33,9 +33,11 @@ npm install
 
 #### 2. Use .env file (provided by me)
 - Ensure it is named `.env` with the dot
+- Put it in the root directory
 
 #### 3. Start the Application
 ```bash
+<<<<<<< HEAD
 #terminal 1: start backend server
 cd backend
 node server.js
@@ -44,6 +46,9 @@ npm install -g nodemon
 nodemon server. js
 
 #terminal 2: start frontend
+=======
+#start frontend
+>>>>>>> ea00ab74fa6b6df7bd9ae253c9b09adeb1f00078
 cd ..
 npm start
 ```

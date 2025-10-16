@@ -56,7 +56,7 @@ const transactionSchema = new mongoose.Schema({
     },
     amount: {
       type: Number,
-      required: true,
+      // amount may be set by split calculations (percentage/equal). Not required on input for percentage splits.
       min: 0
     },
     percentage: {
@@ -92,6 +92,13 @@ const transactionSchema = new mongoose.Schema({
       date: Date
     }
   },
+  // optional itemized breakdown submitted by client
+  items: [{
+    name: String,
+    price: Number,
+    quantity: { type: Number, default: 1 },
+    assignees: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  }],
   notes: {
     type: String,
     maxlength: [500, 'Notes cannot be more than 500 characters'],
@@ -194,6 +201,33 @@ transactionSchema.index({ group: 1, createdAt: -1 });
 
 // Pre-save middleware to validate split amounts
 transactionSchema.pre('save', function(next) {
+  // If items are provided, derive participants and amounts from them
+  if (this.items && this.items.length > 0) {
+    const map = {}; // userId -> amount
+    this.items.forEach(it => {
+      const price = Number(it.price || 0) * Number(it.quantity || 1);
+      const assignees = (it.assignees || []).map(a => a.toString());
+      if (!assignees || assignees.length === 0) {
+        // assign to payer
+        const pid = this.payer ? this.payer.toString() : this.createdBy?.toString();
+        map[pid] = (map[pid] || 0) + price;
+      } else {
+        const per = price / assignees.length;
+        assignees.forEach(a => {
+          map[a] = (map[a] || 0) + per;
+        });
+      }
+    });
+
+    // set participants array based on map
+    this.participants = Object.keys(map).map(k => ({ user: k, amount: Math.round(map[k] * 100) / 100 }));
+    // If amount wasn't provided or is zero, set it to the sum of item prices
+    const sumItems = Object.values(map).reduce((s, v) => s + v, 0);
+    if (!this.amount || this.amount <= 0) {
+      this.amount = Math.round(sumItems * 100) / 100;
+    }
+  }
+
   if (this.splitMethod === 'equal') {
     this.calculateEqualSplit();
   } else if (this.splitMethod === 'percentage') {
@@ -316,13 +350,13 @@ transactionSchema.statics.getUserGroupBalance = async function(userId, groupId) 
   const result = await this.aggregate([
     {
       $match: {
-        group: mongoose.Types.ObjectId(groupId),
-        $or: [
-          { payer: mongoose.Types.ObjectId(userId) },
-          { 'participants.user': mongoose.Types.ObjectId(userId) }
-        ],
-        status: { $ne: 'cancelled' }
-      }
+          group: new mongoose.Types.ObjectId(groupId),
+          $or: [
+            { payer: new mongoose.Types.ObjectId(userId) },
+            { 'participants.user': new mongoose.Types.ObjectId(userId) }
+          ],
+          status: { $ne: 'cancelled' }
+        }
     },
     {
       $group: {
@@ -330,7 +364,7 @@ transactionSchema.statics.getUserGroupBalance = async function(userId, groupId) 
         totalPaid: {
           $sum: {
             $cond: [
-              { $eq: ['$payer', mongoose.Types.ObjectId(userId)] },
+              { $eq: ['$payer', new mongoose.Types.ObjectId(userId)] },
               '$amount',
               0
             ]
@@ -343,7 +377,7 @@ transactionSchema.statics.getUserGroupBalance = async function(userId, groupId) 
               initialValue: 0,
               in: {
                 $cond: [
-                  { $eq: ['$$this.user', mongoose.Types.ObjectId(userId)] },
+                  { $eq: ['$$this.user', new mongoose.Types.ObjectId(userId)] },
                   { $add: ['$$value', '$$this.amount'] },
                   '$$value'
                 ]

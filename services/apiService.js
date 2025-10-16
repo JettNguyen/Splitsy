@@ -85,25 +85,30 @@ class ApiService {
         data = await response.text();
       }
 
+  // Treat non-2xx responses as errors and provide friendly messages
       if (!response.ok) {
+        // Prefer server-provided message when available
+        const serverMessage = (data && data.message) ? data.message : null;
         // Handle different HTTP error codes
         if (response.status === 401) {
           // Token expired or invalid
           this.setAuthToken(null);
-          throw new Error('Authentication failed. Please log in again.');
+          throw new Error(serverMessage || 'Authentication failed. Please log in again.');
         } else if (response.status === 403) {
-          throw new Error('Access denied.');
+          throw new Error(serverMessage || 'Access denied.');
         } else if (response.status === 404) {
-          throw new Error('Resource not found.');
+          throw new Error(serverMessage || 'Resource not found.');
         } else if (response.status >= 500) {
-          throw new Error('Server error. Please try again later.');
+          throw new Error(serverMessage || 'Server error. Please try again later.');
         } else {
-          throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+          throw new Error(serverMessage || (data && typeof data === 'string' ? data : `HTTP ${response.status}: ${response.statusText}`));
         }
       }
 
+      // Parsed response (JSON or text)
       return data;
     } catch (error) {
+      // Log some context to help debugging during development
       console.error(`API Error [${config.method} ${url}]:`, error.message);
       console.error('Request details:', {
         url,
@@ -118,6 +123,7 @@ class ApiService {
       if (error.message.includes('timed out') || error.message.includes('Request timed out')) {
         throw new Error('Network request timed out');
       }
+      // Re-throw the error for callers to handle (DataContext shows alerts)
       throw error;
     }
   }
@@ -282,15 +288,46 @@ class ApiService {
     });
   }
 
-  async markTransactionPaid(transactionId, paymentMethod = null) {
+  // Mark a participant (or the current user) as paid for a transaction.
+  // The backend settle endpoint expects { userId?, paid?, paymentMethod? }.
+  // We keep this method simple and explicit so callers can pass the user being marked.
+  async markTransactionPaid(transactionId, userId = null, paid = true, paymentMethod = null) {
+    const body = { paymentMethod };
+    if (userId) body.userId = userId;
+    body.paid = paid;
+
     return await this.makeRequest(`/transactions/${transactionId}/settle`, {
       method: 'POST',
-      body: { paymentMethod }
+      body
     });
   }
 
   async getUserBalances() {
     return await this.makeRequest('/transactions/user/balances');
+  }
+
+  // Friend request methods
+  async sendFriendRequest(toId, message = '') {
+    return await this.makeRequest('/users/requests', {
+      method: 'POST',
+      body: { toId, message }
+    });
+  }
+
+  async listFriendRequests() {
+    return await this.makeRequest('/users/requests');
+  }
+
+  async acceptFriendRequest(requestId) {
+    return await this.makeRequest(`/users/requests/${requestId}/accept`, {
+      method: 'POST'
+    });
+  }
+
+  async declineFriendRequest(requestId) {
+    return await this.makeRequest(`/users/requests/${requestId}`, {
+      method: 'DELETE'
+    });
   }
 
   // Utility methods
@@ -312,6 +349,19 @@ class ApiService {
     return await this.makeRequest('/users/friends', {
       method: 'GET',
     });
+  }
+
+  // Remove/unfriend a user (mutual removal)
+  async removeFriend(friendId) {
+    const encoded = encodeURIComponent(String(friendId));
+    return await this.makeRequest(`/users/friends/${encoded}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // Debug: return authenticated user and populated friends (dev only)
+  async getDebugUser() {
+    return await this.makeRequest('/users/debug');
   }
 
 }

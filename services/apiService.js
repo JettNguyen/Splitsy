@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-//test
+
 //api service for handling backend communication
 //backend server url (using the correct ip and port)
-const API_BASE_URL = __DEV__ ? 'http://192.168.0.38:3000/api' : 'https://your-production-api.com/api';
+const API_BASE_URL = __DEV__ ? 'http://100.70.90.4:3000/api' : 'https://your-production-api.com/api';
 
 class ApiService {
   constructor() {

@@ -820,13 +820,6 @@ const ExpenseForm = ({
                     return;
                   }
                 }
-                // Prevent moving from details (step 2) to summary (step 3) without a description
-                if (currentStep === 2) {
-                  if (!formData.description || !formData.description.trim()) {
-                    Alert.alert('Add description', 'Please enter a description for the expense before continuing.');
-                    return;
-                  }
-                }
                 if (currentStep === 3) return handleSubmit();
                 setCurrentStep(currentStep + 1);
               }}

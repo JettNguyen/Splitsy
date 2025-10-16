@@ -20,7 +20,7 @@ const SettlementScreen = ({ visible, onClose }) => {
   const { 
     getUserTransactions, 
     getUserGroups, 
-    settleTransaction,
+    markTransactionPaid,
     calculateUserBalance 
   } = useData();
   
@@ -98,20 +98,22 @@ const SettlementScreen = ({ visible, onClose }) => {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Settle',
-          onPress: async () => {
-            try {
-              for (const transaction of selectedSettlement.transactions) {
-                await settleTransaction(transaction.id);
+              text: 'Settle',
+              onPress: async () => {
+                try {
+                  // Mark each transaction as paid for the current participant.
+                  // Backend will mark participant.paid and update transaction status.
+                  for (const transaction of selectedSettlement.transactions) {
+                    await markTransactionPaid(transaction.id, currentUser.id, true);
+                  }
+
+                  Alert.alert('Success', 'Transactions settled successfully!');
+                  setSelectedSettlement(null);
+                } 
+                catch (error) {
+                  Alert.alert('Error', 'Failed to settle transactions');
+                }
               }
-              
-              Alert.alert('Success', 'Transactions settled successfully!');
-              setSelectedSettlement(null);
-            } 
-            catch (error) {
-              Alert.alert('Error', 'Failed to settle transactions');
-            }
-          }
         }
       ]
     );

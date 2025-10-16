@@ -43,7 +43,7 @@ node server.js
 #terminal 2: start frontend
 cd ..
 npm start
-```
+
 #terminal 3: start python ocr microservice
 
 cd backend/python_ocr
@@ -61,6 +61,7 @@ pip freeze > requirements.txt
 
 -run the flask server
 python main.py
+```
 
 #### 4. Connect Your Device
 - Scan the QR code with Expo Go app

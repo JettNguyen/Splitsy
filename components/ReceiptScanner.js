@@ -1,661 +1,203 @@
+// components/ReceiptScanner.js
+// pick/take a photo → upload to flask /ocr → show parsed result → return to parent
+
 import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Modal,
-  Image,
-  TextInput,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  SafeAreaView
+  View, Text, TouchableOpacity, StyleSheet, Modal, Image, TextInput,
+  ScrollView, ActivityIndicator, Alert, SafeAreaView, Platform
 } from 'react-native';
-
-//external libraries
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
-
-//context and config
 import { useTheme } from '../context/ThemeContext';
-import { API_CONFIG } from '../config/ApiConfig';
 
-//receipt scanner component for extracting data from receipt images
+// set this to your flask url
+// ios sim:      http://127.0.0.1:5000/ocr
+// android emu:  http://10.0.2.2:5000/ocr
+// real device:  http://<your-computer-ip>:5000/ocr
+const BACKEND_URL = 'http://192.168.1.242:5000/ocr';
+
 const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   const { theme } = useTheme();
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [showEditView, setShowEditView] = useState(false);
   const [extractedData, setExtractedData] = useState({
-    merchant: '',
-    date: '',
-    total: '',
-    items: []
+    merchant: '', date: '', subtotal: '', tax: '', service_charge: '', total: '', items: []
   });
+  const [savedInfo, setSavedInfo] = useState({ saved_json_path: '', saved_image_path: '' });
 
-  //reset state when modal closes
+  // reset when modal closes
   useEffect(() => {
     if (!visible) {
+      setIsProcessing(false);
       setCapturedImage(null);
       setShowEditView(false);
-      setExtractedData({
-        merchant: '',
-        date: '',
-        total: '',
-        items: []
-      });
-      setIsProcessing(false);
+      setExtractedData({ merchant: '', date: '', subtotal: '', tax: '', service_charge: '', total: '', items: [] });
+      setSavedInfo({ saved_json_path: '', saved_image_path: '' });
     }
   }, [visible]);
 
-  const processImageWithOCR = async (imageUri) => {
+  // upload image to flask and set parsed data
+  const uploadToBackend = async (imageUri) => {
     try {
-      // Try OCR first since it's now enabled by default
+      setIsProcessing(true);
 
-      // Optimize image for OCR
-      const processedImage = await ImageManipulator.manipulateAsync(
-        imageUri,
-        [
-          { resize: { width: API_CONFIG.MAX_IMAGE_SIZE } },
-        ],
-        { 
-          compress: API_CONFIG.IMAGE_QUALITY, 
-          format: ImageManipulator.SaveFormat.JPEG,
-          base64: true 
-        }
-      );
+      const name = imageUri.split('/').pop() || 'receipt.jpg';
+      const form = new FormData();
 
-      let extractedText = null;
-
-      // Try Google Vision API first if configured
-      if (API_CONFIG.USE_GOOGLE_VISION && API_CONFIG.GOOGLE_VISION_API_KEY !== 'YOUR_GOOGLE_VISION_API_KEY') {
-        try {
-          const visionUrl = `${API_CONFIG.GOOGLE_VISION_URL}?key=${API_CONFIG.GOOGLE_VISION_API_KEY}`;
-          
-          const requestBody = {
-            requests: [{
-              image: { content: processedImage.base64 },
-              features: [{ type: 'TEXT_DETECTION', maxResults: 1 }]
-            }]
-          };
-
-          const response = await fetch(visionUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-          });
-
-          const result = await response.json();
-          if (result.responses?.[0]?.textAnnotations?.[0]) {
-            extractedText = result.responses[0].textAnnotations[0].description;
-          }
-        } catch (error) {
-          // Fallback to free OCR service
-        }
-      }
-
-      // Use free OCR.space API if Google Vision not available or failed
-      if (!extractedText) {
-        try {
-          const formData = new FormData();
-          formData.append('base64Image', `data:image/jpeg;base64,${processedImage.base64}`);
-          formData.append('language', 'eng');
-          formData.append('apikey', API_CONFIG.OCR_API_KEY);
-          formData.append('OCREngine', '2');
-
-          const response = await fetch(API_CONFIG.OCR_API_URL, {
-            method: 'POST',
-            body: formData
-          });
-
-          const result = await response.json();
-          
-          if (result.ParsedResults && result.ParsedResults[0] && result.ParsedResults[0].ParsedText) {
-            extractedText = result.ParsedResults[0].ParsedText;
-          }
-        } catch (error) {
-          // OCR processing failed
-        }
-      }
-
-      // Parse extracted text or use mock data as fallback
-      if (extractedText && extractedText.trim().length > 10) {
-        const parsedData = parseReceiptText(extractedText);
-        return parsedData;
+      if (Platform.OS === 'web') {
+        // web: need a real File
+        const resp = await fetch(imageUri); // fetch blob from uri (can be blob: or data:)
+        const blob = await resp.blob();
+        const file = new File([blob], name, { type: blob.type || 'image/jpeg' });
+        form.append('file', file);
       } else {
-        return mockReceiptData();
+        // native: append uri object
+        const ext = name.split('.').pop()?.toLowerCase();
+        const type =
+          ext === 'png' ? 'image/png' :
+          ext === 'heic' || ext === 'heif' ? 'image/heic' :
+          'image/jpeg';
+        form.append('file', { uri: imageUri, name, type });
       }
 
-    } catch (error) {
-      console.error('OCR Processing Error:', error);
-      Alert.alert(
-        'Processing Notice', 
-        'Using smart detection for this receipt.',
-        [{ text: 'OK' }]
-      );
-      return mockReceiptData();
+      // let fetch set the multipart boundary (no manual content-type)
+      const res = await fetch(BACKEND_URL, { method: 'POST', body: form });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `http ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      setExtractedData({
+        merchant: data.merchant || 'unknown merchant',
+        date: data.date || new Date().toLocaleDateString(),
+        subtotal: data.subtotal || '0.00',
+        tax: data.tax || '0.00',
+        service_charge: data.service_charge || '0.00',
+        total: data.total || '0.00',
+        items: Array.isArray(data.items)
+          ? data.items.map(i => ({ name: i.name || '', price: i.price?.toString() || '', qty: i.qty || 1 }))
+          : []
+      });
+      setSavedInfo({
+        saved_json_path: data.saved_json_path || '',
+        saved_image_path: data.saved_image_path || ''
+      });
+
+
+
+      
+      setShowEditView(true);
+    } catch (e) {
+      console.error('ocr upload error:', e);
+      Alert.alert('hmm', 'could not read that image. you can edit fields manually.');
+      setShowEditView(true);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const parseReceiptText = (text) => {
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
-    // Initialize extracted data
-    let merchant = '';
-    let date = '';
-    let total = '';
-    let items = [];
-
-    // Patterns for parsing
-    const merchantPatterns = [
-      /^([A-Z][A-Za-z\s&']+)/, // Common business name patterns
-      /(STORE|MARKET|SHOP|RESTAURANT|CAFE|PIZZA|BURGER|COFFEE|TARGET|WALMART|COSTCO|STARBUCKS)/i
-    ];
-
-    const datePatterns = [
-      /(\d{1,2}\/\d{1,2}\/\d{2,4})/,
-      /(\d{1,2}-\d{1,2}-\d{2,4})/,
-      /(\d{4}-\d{1,2}-\d{1,2})/
-    ];
-
-    const totalPatterns = [
-      /(?:TOTAL|AMOUNT|GRAND TOTAL|BALANCE|DUE)[\s:$]*(\d+\.\d{2})/i,
-      /(?:^|\s)(\d+\.\d{2})(?:\s*$)/
-    ];
-
-    // Item patterns for column-based receipts like Target
-    const itemPatterns = [
-      // Target format: "270060508: 24.8oz pzrol NF $5.89" (item code: description size/type price)
-      /^(\d+):\s*(.+?)\s+([A-Z]{1,3})\s*\$?(\d+\.\d{2})$/,
-      
-      // Target format split across OCR: "270060508:" then "24.8oz pzrol" then "NF" then "$5.89"
-      /^(\d+):\s*(.+)$/,  // First part with item code and description
-      
-      // Generic columnar format: "ITEM_CODE DESCRIPTION CATEGORY $PRICE"
-      /^([A-Z0-9]+)\s+(.+?)\s+([A-Z]{1,4})\s*\$?(\d+\.\d{2})$/,
-      
-      // Items that start with price indicators: "REGULAR PRICE $4.99"
-      /^(?:REGULAR\s+PRICE|SALE\s+PRICE|PRICE)\s*\$?(\d+\.\d{2})$/i,
-      
-      // Standard patterns for non-columnar items
-      /^(\d{3,10})\s+(.+?)\s+\$?(\d+\.\d{2})$/,  // "12345 Product Name $4.99"
-      /^(.+?)\s{2,}\$?(\d+\.\d{2})$/,            // "Product Name    $4.99"
-      /^(.+?)\s+\$?(\d+\.\d{2})$/                // "Product Name $4.99"
-    ];
-
-    const pricePattern = /(\d+\.\d{2})/g;
-
-    // Extract merchant (usually first few lines)
-    for (let i = 0; i < Math.min(5, lines.length); i++) {
-      for (const pattern of merchantPatterns) {
-        const match = lines[i].match(pattern);
-        if (match && !merchant) {
-          merchant = match[1] || match[0];
-          break;
-        }
-      }
-      if (merchant) break;
-    }
-
-    // Extract date
-    for (const line of lines) {
-      for (const pattern of datePatterns) {
-        const match = line.match(pattern);
-        if (match) {
-          date = match[1];
-          break;
-        }
-      }
-      if (date) break;
-    }
-
-    // Extract total (look for largest monetary amount or specific total indicators)
-    let amounts = [];
-    for (const line of lines) {
-      for (const pattern of totalPatterns) {
-        const match = line.match(pattern);
-        if (match) {
-          total = match[1];
-          break;
-        }
-      }
-      if (!total) {
-        // Collect all monetary amounts
-        const matches = line.match(pricePattern);
-        if (matches) {
-          amounts.push(...matches.map(m => parseFloat(m)));
-        }
-      }
-    }
-
-    // If no explicit total found, use the largest amount
-    if (!total && amounts.length > 0) {
-      total = Math.max(...amounts).toFixed(2);
-    }
-
-    // Multi-format receipt parser (Target, Walmart, and others)
-    
-    // Step 1: Detect receipt format
-    let receiptFormat = 'unknown';
-    let hasTargetFormat = false;
-    let hasWalmartFormat = false;
-    
-    // Check for Target format (item codes with descriptions on same line)
-    for (const line of lines) {
-      if (line.match(/^\d{6,12}\s+[A-Za-z]/)) {
-        hasTargetFormat = true;
-        break;
-      }
-    }
-    
-    // Check for Walmart format (separate item names and UPC sections)
-    let itemNamesSection = false;
-    let upcSection = false;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      
-      // Look for consecutive item names (all caps, no numbers)
-      if (line.match(/^[A-Z][A-Z\s]{2,}$/) && !line.match(/(?:TOTAL|TAX|SUBTOTAL|STORE|STREET|CITY|STATE)/)) {
-        let consecutiveItems = 0;
-        for (let j = i; j < Math.min(i + 10, lines.length); j++) {
-          if (lines[j].match(/^[A-Z][A-Z\s]{2,}$/) && !lines[j].match(/(?:TOTAL|TAX|SUBTOTAL|STORE|STREET|CITY|STATE)/)) {
-            consecutiveItems++;
-          } else {
-            break;
-          }
-        }
-        if (consecutiveItems >= 3) {
-          itemNamesSection = true;
-        }
-      }
-      
-      // Look for UPC section (consecutive long numbers)
-      if (line.match(/^\d{8,15}$/)) {
-        let consecutiveUPCs = 0;
-        for (let j = i; j < Math.min(i + 10, lines.length); j++) {
-          if (lines[j].match(/^\d{8,15}$/)) {
-            consecutiveUPCs++;
-          } else {
-            break;
-          }
-        }
-        if (consecutiveUPCs >= 3) {
-          upcSection = true;
-        }
-      }
-    }
-    
-    if (hasTargetFormat) {
-      receiptFormat = 'target';
-    } else if (itemNamesSection && upcSection) {
-      receiptFormat = 'walmart';
-    } else {
-      receiptFormat = 'generic';
-    }
-    
-    // Step 2: Parse based on detected format
-    if (receiptFormat === 'target') {
-      parseTargetFormat();
-    } else if (receiptFormat === 'walmart') {
-      parseWalmartFormat();
-    } else {
-      parseGenericFormat();
-    }
-    
-    // TARGET FORMAT PARSER
-    function parseTargetFormat() {
-      const itemDescriptions = [];
-      const priceList = [];
-      
-      // Collect item descriptions with codes
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const itemMatch = line.match(/^(\d{6,12})\s+(.+)$/);
-        if (itemMatch && isValidItemName(itemMatch[2])) {
-          itemDescriptions.push({
-            name: cleanItemName(itemMatch[2]),
-            lineIndex: i
-          });
-        }
-      }
-      
-      // Collect standalone prices
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const priceMatch = line.match(/^\$(\d+\.?\d*)$/);
-        if (priceMatch && !lines[Math.max(0, i-1)].match(/(?:SUBTOTAL|TOTAL|TAX|PAYMENT)/i)) {
-          let price = priceMatch[1];
-          if (price.indexOf('.') === -1) price += '.00';
-          priceList.push({ price: price, lineIndex: i });
-        }
-      }
-      
-      // Match items with prices sequentially
-      const minCount = Math.min(itemDescriptions.length, priceList.length);
-      for (let i = 0; i < minCount; i++) {
-        items.push({
-          name: itemDescriptions[i].name,
-          price: priceList[i].price
-        });
-      }
-    }
-    
-    // WALMART FORMAT PARSER
-    function parseWalmartFormat() {
-
-      
-      const itemNames = [];
-      const itemPrices = [];
-      
-      // Step 1: Find item names section (consecutive all-caps product names)
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        
-        // Look for item names (all caps, no numbers at start, reasonable length)
-        if (line.match(/^[A-Z][A-Z\s\d]{1,25}$/) && 
-            !line.match(/(?:TOTAL|TAX|SUBTOTAL|STORE|STREET|CITY|STATE|WALMART|SUPERCENTER|MANAGER|CHANGE|CASH|TEND)/i) &&
-            !line.match(/^\d/) &&
-            line.length >= 3 && line.length <= 30) {
-          
-          itemNames.push({
-            name: cleanWalmartItemName(line),
-            lineIndex: i
-          });
-        }
-      }
-      
-      // Step 2: Find prices with tax indicators
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        
-        // Look for prices with tax codes: "5.23 X", "5.00 T", "5.90", etc.
-        const priceMatch = line.match(/^(\d+\.\d{2})\s*([XTNF]?)$/);
-        if (priceMatch) {
-          const price = priceMatch[1];
-          const taxCode = priceMatch[2] || '';
-          
-          // Skip if this looks like a total/subtotal price
-          if (parseFloat(price) > 20 && (taxCode === '' || i > lines.length - 10)) {
-            continue;
-          }
-          
-          itemPrices.push({
-            price: price,
-            taxCode: taxCode,
-            lineIndex: i
-          });
-        }
-      }
-      
-      // Step 3: Match items with prices sequentially
-
-      
-      const minCount = Math.min(itemNames.length, itemPrices.length);
-      for (let i = 0; i < minCount; i++) {
-        items.push({
-          name: itemNames[i].name,
-          price: itemPrices[i].price
-        });
-      }
-    }
-    
-    // GENERIC FORMAT PARSER
-    function parseGenericFormat() {
-
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        
-        // Skip obvious non-item lines
-        
-        // Try various generic patterns
-        const patterns = [
-          line.match(/^(.+?)\s+\$?(\d+\.\d{2})$/),  // "Item Name $5.99"
-          line.match(/^(.+?)\s{2,}(\d+\.\d{2})$/),  // "Item Name    5.99"
-          line.match(/^(\d+)\s+(.+?)\s+(\d+\.\d{2})$/), // "123 Item Name 5.99"
-        ];
-        
-        for (const match of patterns) {
-          if (match) {
-            let itemName = '';
-            let price = '';
-            
-            if (match.length === 3) {
-              itemName = match[1].trim();
-              price = match[2];
-            } else if (match.length === 4) {
-              itemName = match[2].trim();
-              price = match[3];
-            }
-            
-            if (itemName && price && isValidItemName(itemName)) {
-              items.push({
-                name: cleanItemName(itemName),
-                price: price
-              });
-              break;
-            }
-          }
-        }
-      }
-    }
-    
-    // Helper functions
-    function isValidItemName(name) {
-      if (!name || name.length < 2 || name.length > 80) return false;
-      if (name.match(/(?:TOTAL|TAX|SUBTOTAL|CHANGE|CARD|CASH|RECEIPT|THANK|STORE|ADDRESS|PHONE|DATE|TIME|CASHIER|REGISTER|VOID|REFUND|BALANCE|TENDER|GROCERY|HEALTH|BEAUTY|WALMART|SUPERCENTER|MANAGER|STREET|CITY|STATE)/i)) return false;
-      if (name.match(/^\d+$/) || name.match(/^[^A-Za-z]*$/)) return false;
-      if (name.match(/^(NF|TF|T\+|[A-Z]{1,3})$/)) return false;
-      if (name.match(/^\d{6,15}$/)) return false; // UPC codes
-      return true;
-    }
-    
-    function cleanItemName(name) {
-      // Remove item codes from the beginning
-      name = name.replace(/^(\d{6,12})\s+/, '').trim();
-      name = name.replace(/\s+(NF|TF|T\+|[A-Z]{1,3})$/, '').trim();
-      name = name.replace(/[^\w\s\-'&.()%]/g, ' ').trim();
-      name = name.replace(/\s+/g, ' ');
-      name = name.replace(/(\d+)\.?(\d*)Z\b/g, '$1.$2oz').replace(/\.oz/g, 'oz');
-      name = name.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-      return name;
-    }
-    
-    function cleanWalmartItemName(name) {
-      // Clean Walmart-specific naming
-      name = name.replace(/\s+/g, ' ').trim();
-      name = name.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-      
-      // Handle common Walmart abbreviations
-      name = name.replace(/\bVAK\b/g, 'Vacuum');
-      name = name.replace(/\bKLLL\b/g, 'Kill');
-      name = name.replace(/\bAM\b/g, 'Am');
-      name = name.replace(/\bG2\b/g, 'G2');
-      
-      return name;
-    }
-    
-    return items;
-  };
-
-    // Clean up merchant name
-    if (merchant) {
-      merchant = merchant.replace(/[^A-Za-z\s&'-]/g, '').trim();
-      merchant = merchant.split(' ').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-      ).join(' ');
-    }
-
-    // Format date to MM/DD/YYYY
-    if (date) {
-      const dateObj = new Date(date);
-      if (!isNaN(dateObj.getTime())) {
-        date = `${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getDate()).padStart(2, '0')}/${dateObj.getFullYear()}`;
-      }
-    }
-
-    return {
-      merchant: merchant || 'Unknown Merchant',
-      date: date || new Date().toLocaleDateString(),
-      total: total || '0.00',
-      items: items.slice(0, 10) // Limit to 10 items
-    };
-  };
-
-  const mockReceiptData = () => {
-    // More realistic simulation with common receipt patterns
-    const realMerchants = [
-      'Target', 'Walmart Supercenter', 'Costco Wholesale', 'CVS Pharmacy',
-      'Walgreens', 'Home Depot', 'Lowes', 'Best Buy', 'Kroger', 'Safeway',
-      'Starbucks Coffee', 'McDonald\'s', 'Chipotle Mexican Grill', 'Subway',
-      'Shell Gas Station', 'Exxon Mobil', 'Amazon Fresh', 'Whole Foods Market'
-    ];
-
-    const realItems = [
-      { name: 'Bananas Organic', price: '3.47' },
-      { name: 'Bread Whole Wheat', price: '2.99' },
-      { name: 'Milk 2% Gallon', price: '4.29' },
-      { name: 'Eggs Large Dozen', price: '3.89' },
-      { name: 'Ground Beef 1lb', price: '6.99' },
-      { name: 'Chicken Breast', price: '8.47' },
-      { name: 'Paper Towels', price: '12.99' },
-      { name: 'Laundry Detergent', price: '9.47' },
-      { name: 'Shampoo Bottle', price: '5.99' },
-      { name: 'Toothpaste', price: '3.47' },
-      { name: 'Orange Juice', price: '4.19' },
-      { name: 'Cereal Box', price: '4.99' },
-      { name: 'Yogurt 6-pack', price: '5.47' },
-      { name: 'Apples 3lb Bag', price: '4.99' }
-    ];
-
-    const merchant = realMerchants[Math.floor(Math.random() * realMerchants.length)];
-    const numItems = Math.floor(Math.random() * 6) + 1; // 1-6 items
-    const selectedItems = [];
-
-    for (let i = 0; i < numItems; i++) {
-      const randomItem = realItems[Math.floor(Math.random() * realItems.length)];
-      selectedItems.push({ ...randomItem });
-    }
-
-    const subtotal = selectedItems.reduce((sum, item) => sum + parseFloat(item.price), 0);
-    const tax = subtotal * 0.0875; // 8.75% tax
-    const total = subtotal + tax;
-
-    const today = new Date();
-    const formattedDate = `${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}/${today.getFullYear()}`;
-
-    return {
-      merchant,
-      date: formattedDate,
-      total: total.toFixed(2),
-      items: selectedItems
-    };
-  };
-
+  // camera flow
   const takePhoto = async () => {
-    try {
-      setIsProcessing(true);
-      
-      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      if (permissionResult.granted === false) {
-        Alert.alert('Permission Required', 'Camera permission is required to take photos!');
-        setIsProcessing(false);
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.9, // Higher quality for better OCR
-      });
-
-      if (!result.canceled) {
-        setCapturedImage(result.assets[0].uri);
-        
-        // Process image with OCR
-        const extractedReceiptData = await processImageWithOCR(result.assets[0].uri);
-        setExtractedData(extractedReceiptData);
-        setShowEditView(true);
-      }
-    } catch (error) {
-      console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo');
-    } finally {
-      setIsProcessing(false);
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('permission', 'please enable camera to snap your receipt');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.9 });
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      setCapturedImage(uri);
+      await uploadToBackend(uri);
     }
   };
 
+  // gallery flow
   const pickImage = async () => {
-    try {
-      setIsProcessing(true);
-      
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (permissionResult.granted === false) {
-        Alert.alert('Permission Required', 'Media library permission is required!');
-        setIsProcessing(false);
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.9, // Higher quality for better OCR
-      });
-
-      if (!result.canceled) {
-        setCapturedImage(result.assets[0].uri);
-        
-        // Process image with OCR
-        const extractedReceiptData = await processImageWithOCR(result.assets[0].uri);
-        setExtractedData(extractedReceiptData);
-        setShowEditView(true);
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image');
-    } finally {
-      setIsProcessing(false);
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('permission', 'please enable photo library to pick a receipt');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.9
+    });
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      setCapturedImage(uri);
+      await uploadToBackend(uri);
     }
   };
 
-  const addItem = () => {
-    setExtractedData(prev => ({
-      ...prev,
-      items: [...prev.items, { name: '', price: '' }]
-    }));
-  };
+  // edit helpers
+  // const addItem = () =>
+  //   setExtractedData(p => ({ ...p, items: [...p.items, { name: '', price: '', qty: 1 }] }));
 
-  const removeItem = (index) => {
-    setExtractedData(prev => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index)
-    }));
-  };
+  const addItem = () =>
+  setExtractedData(prev => {
+    const newItem = { name: '', price: '', qty: 1 };
 
-  const updateItem = (index, field, value) => {
-    setExtractedData(prev => ({
-      ...prev,
-      items: prev.items.map((item, i) => 
-        i === index ? { ...item, [field]: value } : item
-      )
-    }));
-  };
+    // subtotal doesn’t change yet since no price entered
+    return { ...prev, items: [...prev.items, newItem] };
+  });
 
+  // const removeItem = (i) =>
+  //   setExtractedData(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }));
+
+  //also updates subtotal value 
+  const removeItem = (i) =>
+  setExtractedData(prev => {
+    const removedItem = prev.items[i];
+    const qty = removedItem && !isNaN(parseInt(removedItem.qty)) ? parseInt(removedItem.qty) : 1;
+    const price = removedItem && !isNaN(parseFloat(removedItem.price)) ? parseFloat(removedItem.price) : 0;
+
+    const updatedItems = prev.items.filter((_, idx) => idx !== i);
+    const newSubtotal = Math.max(0, (parseFloat(prev.subtotal) || 0) - qty * price);
+
+    return { ...prev, items: updatedItems, subtotal: newSubtotal.toFixed(2) };
+  });
+
+  // const updateItem = (i, field, val) =>
+  //   setExtractedData(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [field]: val } : it) }));
+
+  const updateItem = (i, field, val) =>
+  setExtractedData(prev => {
+    const updatedItems = prev.items.map((it, idx) =>
+      idx === i ? { ...it, [field]: val } : it
+    );
+
+    // recompute subtotal from scratch (simpler + safer)
+    let subtotal = 0;
+    for (const item of updatedItems) {
+      const q = !isNaN(parseInt(item.qty)) ? parseInt(item.qty) : 1;
+      const p = !isNaN(parseFloat(item.price)) ? parseFloat(item.price) : 0;
+      subtotal += q * p;
+    }
+
+    const tax = !isNaN(parseFloat(prev.tax)) ? parseFloat(prev.tax) : 0;
+    const newTotal = (subtotal + tax).toFixed(2);
+
+    return {
+      ...prev,
+      items: updatedItems,
+      subtotal: subtotal.toFixed(2),
+      total: newTotal
+    };
+  });
+
+  
+  // confirm and pass back
   const handleConfirm = () => {
-    if (!extractedData.merchant.trim()) {
-      Alert.alert('Error', 'Please enter a merchant name');
-      return;
-    }
-    if (!extractedData.total.trim()) {
-      Alert.alert('Error', 'Please enter a total amount');
-      return;
-    }
+    if (!extractedData.merchant.trim()) return Alert.alert('missing', 'please enter a merchant');
+    if (!extractedData.tax.trim()) return Alert.alert('missing', 'please enter a tax');
+    if (!extractedData.total.trim()) return Alert.alert('missing', 'please enter a total');
 
-    onReceiptScanned(extractedData);
+    onReceiptScanned({ ...extractedData, _saved: savedInfo });
     onClose();
   };
 
@@ -668,14 +210,10 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   if (!visible) return null;
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-    >
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
         {!showEditView ? (
-          // Camera/Gallery Selection View
+          // step 1: choose photo
           <View style={[styles.centerContainer, { backgroundColor: theme.colors.background }]}>
             <View style={[styles.header, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
               <TouchableOpacity onPress={handleClose}>
@@ -684,78 +222,83 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
               <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Receipt Scanner</Text>
               <View style={{ width: 20 }} />
             </View>
-            
+
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-              <View style={styles.cameraIconContainer}>
-                <Text style={styles.cameraIconText}>C</Text>
-              </View>
-              <Text style={[{ fontSize: 24, fontWeight: '600', marginBottom: 10, color: theme.colors.text, textAlign: 'center' }]}>
+              <View style={styles.icon}><Text style={styles.iconText}>🧾</Text></View>
+              <Text style={[{ fontSize: 22, fontWeight: '700', marginBottom: 8, color: theme.colors.text }]}>
                 Scan Receipt
               </Text>
-              <Text style={[{ fontSize: 16, marginBottom: 40, color: theme.colors.textSecondary, textAlign: 'center' }]}>
-                Take a photo or choose from your gallery to extract receipt details using OCR
+              <Text style={[{ fontSize: 15, marginBottom: 24, color: theme.colors.textSecondary, textAlign: 'center' }]}>
+                we’ll read the text, save a json on the server, and let you edit the details
               </Text>
-              
-              <TouchableOpacity 
-                style={[styles.actionButton, { backgroundColor: theme.colors.primary, marginBottom: 15 }]} 
+
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.colors.primary, marginBottom: 12 }]}
                 onPress={takePhoto}
                 disabled={isProcessing}
               >
-                <Text style={styles.actionButtonText}>
-                  📷  Take Photo
-                </Text>
+                <Text style={styles.actionButtonText}>📷 take photo</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.actionButton, { backgroundColor: theme.colors.secondary || theme.colors.card, borderWidth: 2, borderColor: theme.colors.primary }]} 
+
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.colors.card, borderWidth: 2, borderColor: theme.colors.primary }]}
                 onPress={pickImage}
                 disabled={isProcessing}
               >
-                <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>
-                  Choose from Gallery
-                </Text>
+                <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>choose from gallery</Text>
               </TouchableOpacity>
-              
+
               {isProcessing && (
-                <View style={{ alignItems: 'center', marginTop: 30 }}>
+                <View style={{ alignItems: 'center', marginTop: 20 }}>
                   <ActivityIndicator size="large" color={theme.colors.primary} />
-                  <Text style={[{ color: theme.colors.textSecondary, marginTop: 10, textAlign: 'center' }]}>
-                    Processing with OCR...
-                  </Text>
-                  <Text style={[{ color: theme.colors.textSecondary, marginTop: 5, fontSize: 12, textAlign: 'center' }]}>
-                    Extracting text from receipt image
+                  <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>
+                    Reading your receipt…
                   </Text>
                 </View>
               )}
             </View>
           </View>
         ) : (
-          // Edit Receipt Data View
+          // step 2: review + edit
           <ScrollView style={[styles.editContainer, { backgroundColor: theme.colors.background }]}>
             <View style={[styles.editHeader, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
               <TouchableOpacity onPress={() => setShowEditView(false)}>
                 <Text style={[styles.backButton, { color: theme.colors.primary }]}>← Back</Text>
               </TouchableOpacity>
-              <Text style={[styles.editTitle, { color: theme.colors.text }]}>Review Receipt</Text>
+              <Text style={[styles.editTitle, { color: theme.colors.text }]}>Review Details</Text>
               <TouchableOpacity onPress={handleConfirm}>
-                <Text style={[styles.confirmButton, { color: theme.colors.primary }]}>Confirm</Text>
+                <Text style={[styles.confirmButton, { color: theme.colors.primary }]}>Save</Text>
               </TouchableOpacity>
             </View>
 
-            {capturedImage && (
-              <Image source={{ uri: capturedImage }} style={styles.previewImage} />
+            {capturedImage ? <Image source={{ uri: capturedImage }} style={styles.previewImage} /> : null}
+
+            {(savedInfo.saved_json_path || savedInfo.saved_image_path) && (
+              <View style={[styles.infoBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>saved on server:</Text>
+                {!!savedInfo.saved_json_path && (
+                  <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                    json: {savedInfo.saved_json_path}
+                  </Text>
+                )}
+                {!!savedInfo.saved_image_path && (
+                  <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                    image: {savedInfo.saved_image_path}
+                  </Text>
+                )}
+              </View>
             )}
 
             <View style={[styles.formSection, { backgroundColor: theme.colors.card }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Receipt Details</Text>
-              
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Receipt</Text>
+
               <View style={styles.inputGroup}>
                 <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Merchant</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
                   value={extractedData.merchant}
-                  onChangeText={(text) => setExtractedData(prev => ({ ...prev, merchant: text }))}
-                  placeholder="Enter merchant name"
+                  onChangeText={(t) => setExtractedData(p => ({ ...p, merchant: t }))}
+                  placeholder="e.g., target"
                   placeholderTextColor={theme.colors.textSecondary}
                 />
               </View>
@@ -765,19 +308,43 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
                 <TextInput
                   style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
                   value={extractedData.date}
-                  onChangeText={(text) => setExtractedData(prev => ({ ...prev, date: text }))}
-                  placeholder="MM/DD/YYYY"
+                  onChangeText={(t) => setExtractedData(p => ({ ...p, date: t }))}
+                  placeholder="mm/dd/yyyy"
                   placeholderTextColor={theme.colors.textSecondary}
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Total Amount</Text>
+                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Subtotal</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
+                  value={extractedData.subtotal}
+                  onChangeText={(t) => setExtractedData(p => ({ ...p, subtotal: t }))}
+                  placeholder="$0.00"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Tax</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
+                  value={extractedData.tax}
+                  onChangeText={(t) => setExtractedData(p => ({ ...p, tax: t }))}
+                  placeholder="$0.00"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Total</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
                   value={extractedData.total}
-                  onChangeText={(text) => setExtractedData(prev => ({ ...prev, total: text }))}
-                  placeholder="Enter total amount"
+                  onChangeText={(t) => setExtractedData(p => ({ ...p, total: t }))}
+                  placeholder="$0.00"
                   placeholderTextColor={theme.colors.textSecondary}
                   keyboardType="decimal-pad"
                 />
@@ -786,33 +353,38 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
 
             <View style={[styles.formSection, { backgroundColor: theme.colors.card }]}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Items (Optional)</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Items (optional)</Text>
                 <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={addItem}>
-                  <Text style={styles.addButtonText}>+ Add Item</Text>
+                  <Text style={styles.addButtonText}>+ Add item</Text>
                 </TouchableOpacity>
               </View>
 
-              {extractedData.items.map((item, index) => (
-                <View key={index} style={styles.itemRow}>
+              {extractedData.items.map((item, idx) => (
+                <View key={idx} style={styles.itemRow}>
+                  <TextInput
+                  style={[styles.input, styles.itemQtyInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
+                  value={String(item.qty)}
+                  onChangeText={(t) => updateItem(idx, 'qty', t.replace(/[^0-9]/g, ''))} // allow only numbers
+                  placeholder="Qty"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="numeric"
+                />
                   <TextInput
                     style={[styles.input, styles.itemNameInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
                     value={item.name}
-                    onChangeText={(text) => updateItem(index, 'name', text)}
-                    placeholder="Item name"
+                    onChangeText={(t) => updateItem(idx, 'name', t)}
+                    placeholder="item name"
                     placeholderTextColor={theme.colors.textSecondary}
                   />
                   <TextInput
                     style={[styles.input, styles.itemPriceInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
                     value={item.price}
-                    onChangeText={(text) => updateItem(index, 'price', text)}
+                    onChangeText={(t) => updateItem(idx, 'price', t)}
                     placeholder="$0.00"
                     placeholderTextColor={theme.colors.textSecondary}
                     keyboardType="decimal-pad"
                   />
-                  <TouchableOpacity 
-                    style={styles.removeButton}
-                    onPress={() => removeItem(index)}
-                  >
+                  <TouchableOpacity style={styles.removeButton} onPress={() => removeItem(idx)}>
                     <Text style={styles.removeButtonText}>✕</Text>
                   </TouchableOpacity>
                 </View>
@@ -826,150 +398,170 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centerContainer: {
-    flex: 1,
-  },
-  cameraIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 25,
+  
+  container: { flex: 1 },
+  centerContainer: { flex: 1 },
+  icon: {
+    width: 100, 
+    height: 100, 
+    borderRadius: 26, 
     backgroundColor: '#7c3aed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 30,
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 20
   },
-  cameraIconText: {
-    fontSize: 40,
-    fontWeight: '900',
-    color: 'white',
-  },
+  
+  iconText: { 
+    fontSize: 40, 
+    fontWeight: '900', 
+    color: 'white'
+   },
+
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20, 
+    paddingTop: 10, 
+    paddingBottom: 14, 
+    borderBottomWidth: 1
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+
+  headerTitle: { 
+    fontSize: 18, 
+    fontWeight: '700' 
   },
-  closeButtonText: {
-    fontSize: 18,
-  },
+
+  closeButtonText: { fontSize: 18 },
+
   actionButton: {
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
-    minWidth: 200,
-    alignItems: 'center',
+    paddingHorizontal: 26, 
+    paddingVertical: 14, 
+    borderRadius: 22, 
+    minWidth: 200, 
+    alignItems: 'center'
+   },
+
+  actionButtonText: { 
+    color: 'white', 
+    fontSize: 16, 
+    fontWeight: '700' 
   },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  editContainer: {
-    flex: 1,
-  },
+
+  editContainer: { flex: 1 },
+
   editHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20, 
+    paddingTop: 10, 
+    paddingBottom: 14, 
+    borderBottomWidth: 1
   },
-  backButton: {
-    fontSize: 16,
-    fontWeight: '600',
+
+  backButton: { 
+    fontSize: 16, 
+    fontWeight: '700'
+   },
+
+  editTitle: { 
+    fontSize: 18, 
+    fontWeight: '800' 
   },
-  editTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+
+  confirmButton: { 
+    fontSize: 16, 
+    fontWeight: '700' 
   },
-  confirmButton: {
-    fontSize: 16,
-    fontWeight: '600',
+
+  previewImage: { 
+    width: '100%', 
+    height: 220, 
+    resizeMode: 'contain', 
+    backgroundColor: '#000' 
   },
-  previewImage: {
-    width: '100%',
-    height: 200,
-    resizeMode: 'contain',
-    backgroundColor: '#000',
+
+  infoBox: { 
+    margin: 12, 
+    padding: 12, 
+    borderRadius: 10, 
+    borderWidth: 1 
   },
-  formSection: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 12,
-    padding: 16,
+
+  infoText: { fontSize: 12 },
+
+  formSection: { 
+    marginHorizontal: 16, 
+    marginVertical: 10, 
+    borderRadius: 12, 
+    padding: 16 
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+
+  sectionHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 10 
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 16,
+
+  sectionTitle: { 
+    fontSize: 17, 
+    fontWeight: '800', 
+    marginBottom: 8 
   },
-  inputGroup: {
-    marginBottom: 16,
+
+  inputGroup: { marginBottom: 10 },
+
+  label: { 
+    fontSize: 13, 
+    fontWeight: '700', 
+    marginBottom: 6 
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+
+  input: { 
+    borderWidth: 1, 
+    borderRadius: 8, 
+    paddingHorizontal: 12, 
+    paddingVertical: 12, 
+    fontSize: 16 
   },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
+
+  addButton: { 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 6 
   },
-  addButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
+
+  addButtonText: { 
+    color: 'white', 
+    fontSize: 14, 
+    fontWeight: '700' 
   },
-  addButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
+
+  itemRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 10, 
+    gap: 8 
   },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
+
+  itemNameInput: { flex: 2 },
+  itemPriceInput: { flex: 1 },
+  itemQtyInput: { flex: 0.5 },
+
+  removeButton: { 
+    backgroundColor: '#EF4444', 
+    borderRadius: 12, 
+    width: 28, height: 28, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
   },
-  itemNameInput: {
-    flex: 2,
-  },
-  itemPriceInput: {
-    flex: 1,
-  },
-  removeButton: {
-    backgroundColor: '#EF4444',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  removeButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
+
+  removeButtonText: { 
+    color: 'white', 
+    fontSize: 14, 
+    fontWeight: '800' 
   },
 });
 

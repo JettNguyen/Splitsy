@@ -46,6 +46,19 @@ nodemon server. js
 #terminal 2: start frontend
 cd ..
 npm start
+
+#terminal 3: start python ocr microservice
+
+cd backend/python_ocr
+
+python -m venv venv       #start python environment
+
+venv\Scripts\activate        # windows  
+source venv/bin/activate     # mac/linux
+                             
+pip install flask flask-cors pillow pytesseract werkzeug    #install dependencies
+
+python main.py      #run the flask server
 ```
 
 #### 4. Connect Your Device

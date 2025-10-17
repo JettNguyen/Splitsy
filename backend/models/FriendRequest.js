@@ -22,4 +22,4 @@ friendRequestSchema.set('toJSON', {
   }
 });
 
-module.exports = mongoose.model('FriendRequest', friendRequestSchema);
+module.exports = mongoose.models.FriendRequest || mongoose.model('FriendRequest', friendRequestSchema);

@@ -9,6 +9,8 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 // Route imports
 const authRoutes = require('./routes/auth');
 const groupRoutes = require('./routes/groups');
+const requestRoutes = require('./routes/requests');
+const friendRoutes = require('./routes/friends');
 const transactionRoutes = require('./routes/transactions');
 
 const app = express();
@@ -100,6 +102,8 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/users', requestRoutes);
+app.use('/api/users', friendRoutes);
 
 // Global error handler
 app.use((error, req, res, next) => {

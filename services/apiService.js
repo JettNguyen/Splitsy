@@ -1,19 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
-// api service for handling backend communication
-// Read IP and PORT from Expo runtime config (app.json extra) if available.
-// Avoid static `@env` import to keep bundler from failing when that plugin isn't configured.
-const extra = (Constants && (Constants.manifest && Constants.manifest.extra)) || (Constants && Constants.expoConfig && Constants.expoConfig.extra) || {};
-const IP_ADDRESS = extra.IP_ADDRESS || '192.168.0.38';
-const PORT = extra.PORT || '3000';
-const API_BASE_URL = __DEV__
-  ? `http://${IP_ADDRESS}:${PORT}/api`
-  : 'https://your-production-api.com/api';
-
 //api service for handling backend communication
 //backend server url (using the correct ip and port)
-//const API_BASE_URL = __DEV__ ? 'http://192.168.1.242:3000/api' : 'https://your-production-api.com/api';
+const { IP_ADDRESS, PORT, PROD_API_URL } = Constants.expoConfig.extra;
+console.log('ApiService: Configured IP_ADDRESS=', IP_ADDRESS, 'PORT=', PORT, 'PROD_API_URL=', PROD_API_URL);
+export const API_BASE_URL = __DEV__
+  ? `http://${IP_ADDRESS}:${PORT}/api`
+  : PROD_API_URL;
 
 class ApiService {
   constructor() {

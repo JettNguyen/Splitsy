@@ -157,3 +157,48 @@ local.properties
 
 # Old README backup
 README_OLD.md
+
+# node / react native
+node_modules/
+.expo/
+.expo-shared/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# metro / cache
+.expo/*
+*.packager
+*.tmp
+tmp/
+.cache/
+
+# ios / android (if expo-managed, you won't have these; if bare, keep them)
+# uncomment if you want to ignore build outputs only
+ios/build/
+android/app/build/
+android/.gradle/
+android/.idea/
+android/local.properties
+
+# python
+backend/python_ocr/venv/
+backend/python_ocr/__pycache__/
+backend/python_ocr/uploads/
+backend/python_ocr/outputs/
+*.pyc
+
+# env / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# os/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

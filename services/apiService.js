@@ -1,9 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-//api service for handling backend communication
-//backend server url (using the correct ip and port)
-import { IP_ADDRESS, PORT } from '@env';
-const API_BASE_URL = __DEV__ 
+// api service for handling backend communication
+// Read IP and PORT from Expo runtime config (app.json extra) if available.
+// Avoid static `@env` import to keep bundler from failing when that plugin isn't configured.
+const IP_ADDRESS = extra.IP_ADDRESS || '192.168.0.38';
+const PORT = extra.PORT || '3000';
+const API_BASE_URL = __DEV__
   ? `http://${IP_ADDRESS}:${PORT}/api`
   : 'https://your-production-api.com/api';
 
@@ -17,9 +20,17 @@ class ApiService {
   //initialize the service and load stored token
   async init() {
     try {
+      // If token is already set in-memory (e.g. just after login), prefer that to avoid
+      // a race where AsyncStorage hasn't been written yet.
+      if (this.token) {
+        console.log('ApiService.init: token already present in memory');
+        return;
+      }
+
       const token = await AsyncStorage.getItem('authToken');
       if (token) {
         this.token = token;
+        console.log('ApiService.init: token loaded (present in storage)');
       }
     } catch (error) {
       console.error('Error loading token:', error);
@@ -27,12 +38,18 @@ class ApiService {
   }
 
   //set authentication token
-  setAuthToken(token) {
+  async setAuthToken(token) {
     this.token = token;
-    if (token) {
-      AsyncStorage.setItem('authToken', token);
-    } else {
-      AsyncStorage.removeItem('authToken');
+    try {
+      if (token) {
+        await AsyncStorage.setItem('authToken', token);
+        console.log('ApiService.setAuthToken: token set');
+      } else {
+        await AsyncStorage.removeItem('authToken');
+        console.log('ApiService.setAuthToken: token cleared');
+      }
+    } catch (e) {
+      console.error('ApiService.setAuthToken: storage error', e);
     }
   }
 
@@ -52,11 +69,20 @@ class ApiService {
   //generic api call method
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
+    // Debug: show whether a token is present at call time (redacted)
+    try {
+      const tokenPreview = this.token ? `${this.token.slice(0, 6)}...` : null;
+      console.log('ApiService.makeRequest:', options.method || 'GET', url, 'hasAuth=', !!this.token, 'tokenPreview=', tokenPreview);
+    } catch (e) {
+      // swallow logging errors
+    }
     
+    // Merge headers so callers can pass additional headers without removing Authorization
+    const mergedHeaders = { ...this.getAuthHeaders(), ...(options.headers || {}) };
     const config = {
-      method: 'GET',
-      headers: this.getAuthHeaders(),
+      method: options.method || 'GET',
       ...options,
+      headers: mergedHeaders,
     };
 
     // Convert body to JSON if it exists
@@ -137,7 +163,7 @@ class ApiService {
       });
 
       if (response.token) {
-        this.setAuthToken(response.token);
+        await this.setAuthToken(response.token);
         return { success: true, user: response.user, token: response.token };
       }
 
@@ -155,7 +181,7 @@ class ApiService {
       });
 
       if (response.token) {
-        this.setAuthToken(response.token);
+        await this.setAuthToken(response.token);
         return { success: true, user: response.user, token: response.token };
       }
 
@@ -166,7 +192,7 @@ class ApiService {
   }
 
   async logout() {
-    this.setAuthToken(null);
+    await this.setAuthToken(null);
     return { success: true, message: 'Logged out successfully' };
   }
 

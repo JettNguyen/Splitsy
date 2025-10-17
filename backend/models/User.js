@@ -74,6 +74,12 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Group'
   }],
+  // Friends array (references to other User documents).
+  // This field is required for friend-related controllers which populate('friends').
+  friends: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   lastActive: {
     type: Date,
     default: Date.now

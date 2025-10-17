@@ -44,6 +44,15 @@ export const DataProvider = ({ children }) => {
       //initialize api service
       await apiService.init();
 
+      // If there's no auth token after init, don't call protected endpoints.
+      // This avoids noisy 401 logs when the app has a local cached user but no valid token.
+      if (!apiService.token) {
+        console.warn('ApiDataContext: no auth token available; skipping protected data load');
+        setGroups([]);
+        setTransactions([]);
+        return;
+      }
+
       //load user's groups
       await loadGroups();
 

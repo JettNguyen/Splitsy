@@ -1,5 +1,20 @@
 //splitsy backend server - express.js api with mongodb
-const express = require('express');
+const path = require('path');
+
+// Try to load validator mitigation as early as possible. In fresh clones the
+// utils file might be missing if it wasn't committed; log a clear message so
+// developers see the cause instead of a cryptic module-not-found from deeper
+// requires. This does not throw — it logs and continues so the server can
+// start (or fail later) with a clear diagnostic.
+try {
+  const mitigationPath = path.join(__dirname, 'utils', 'validator-mitigation.js');
+  require(mitigationPath);
+  console.log('Loaded validator mitigation from', mitigationPath);
+} catch (err) {
+  console.warn('validator mitigation not found at backend/utils/validator-mitigation.js — continuing without it');
+}
+
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -17,7 +32,7 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 
-//connect to mongodb
+// connect to mongodb
 const connectDB = async () => {
   try {
     console.log('MongoDB URI:', process.env.MONGODB_URI);
@@ -146,40 +161,21 @@ app.use((error, req, res, next) => {
     });
   }
 
-  // JWT errors
-  if (error.name === 'JsonWebTokenError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid token'
-    });
-  }
+  // No in-memory fallback: fail loudly so operator can fix credentials/network.
+  const e = new Error('Unable to connect to MongoDB using provided URIs. Check MONGODB_URI, MONGODB_URI_FALLBACK, credentials, and network access.');
+  e.hint = 'If running locally, ensure your Atlas IP whitelist includes your client IP and any special characters in the password are URL-encoded.';
+  throw e;
+};
 
-  if (error.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Token expired'
-    });
-  }
+let serverInstance = null;
 
-  // Default server error
-  res.status(500).json({
-    success: false,
-    message: process.env.NODE_ENV === 'production' 
-      ? 'Something went wrong' 
-      : error.message
-  });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found'
-  });
-});
-
-// Start server
 const startServer = async () => {
+  // If server already started (e.g. called twice during tests), return it
+  if (serverInstance && serverInstance.listening) {
+    console.log('Server already running');
+    return serverInstance;
+  }
+
   await connectDB();
 
   const server = app.listen(PORT, '0.0.0.0', () => {
@@ -229,15 +225,17 @@ process.on('SIGINT', async () => {
   console.log('\n👋 Graceful shutdown initiated...');
   try {
     await mongoose.connection.close();
-    console.log('Database connection closed.');
-    process.exit(0);
-  } catch (error) {
-    console.error('Error during shutdown:', error);
-    process.exit(1);
+    console.log('Server stopped');
+  } catch (err) {
+    console.error('Error stopping server', err);
   }
-});
+};
 
-startServer().catch(error => {
-  console.error('Failed to start server:', error);
-  process.exit(1);
-});
+if (require.main === module) {
+  startServer().catch(err => {
+    console.error('Failed to start:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { startServer, stopServer, app };

@@ -16,7 +16,7 @@ import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
 import apiService from '../services/apiService';
 
 import { useData } from '../context/ApiDataContext';
-// import { useUser } from '../context/UserContext'; //for future friends management
+import { useUser } from '../context/UserContext'; // check authentication state
 
 function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }) {
   const { deleteGroup: deleteGroupAPI } = useData();
@@ -72,38 +72,39 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
   }
 };
 
-React.useEffect(() => {
-  const fetchFriends = async () => {
-    try {
-      const result = await apiService.getFriends(); // make sure you have this API method
-      if (result.success && Array.isArray(result.friends)) {
-        setFriends(result.friends);
+  const { isAuthenticated } = useUser();
+
+  React.useEffect(() => {
+    const fetchFriends = async () => {
+      try {
+        const result = await apiService.getFriends(); // make sure you have this API method
+        if (result && result.success && Array.isArray(result.friends)) {
+          setFriends(result.friends);
+        }
+      } catch (err) {
+        console.error('Error fetching friends:', err);
       }
-    } catch (err) {
-      console.error('Error fetching friends:', err);
-    }
-  };
+    };
 
-<<<<<<< HEAD
-  fetchFriends();
-}, []); // empty dependency array = run once on mount
-
-  const handleCreateGroup = () => {
-=======
-  const fetchRequests = async () => {
-    try {
-      const res = await apiService.listFriendRequests();
-      if (res && typeof res === 'object') {
-        setRequests({ incoming: res.incoming || [], outgoing: res.outgoing || [] });
+    const fetchRequests = async () => {
+      try {
+        const res = await apiService.listFriendRequests();
+        if (res && typeof res === 'object') {
+          setRequests({ incoming: res.incoming || [], outgoing: res.outgoing || [] });
+        }
+      } catch (err) {
+        console.error('Error fetching requests:', err);
       }
-    } catch (err) {
-      console.error('Error fetching requests:', err);
-    }
-  };
+    };
 
-  fetchFriends();
-  fetchRequests();
-}, []); // empty dependency array = run once on mount
+    // Only fetch protected data when user is authenticated and an auth token exists
+    if (isAuthenticated && apiService.token) {
+      fetchFriends();
+      fetchRequests();
+    } else {
+      console.warn('FriendsScreen: user not authenticated or missing token; skipping friends/requests fetch');
+    }
+  }, [isAuthenticated]); // re-run when auth state changes
 
   const { createGroup: createGroupAPI } = useData();
 

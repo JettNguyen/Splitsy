@@ -51,7 +51,6 @@ const transactionSchema = new mongoose.Schema({
   participants: [{
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
       required: true
     },
     amount: {

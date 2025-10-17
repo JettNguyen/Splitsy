@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const transactController = require('../controllers/transactController');
 const { protect } = require('../middleware/auth');
 const Transaction = require('../models/Transaction');
 const Group = require('../models/Group');

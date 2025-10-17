@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -19,7 +20,25 @@ import apiService from '../services/apiService';
 //context and components
 import { useTheme } from '../context/ThemeContext';
 import ReceiptScanner from './ReceiptScanner';
-
+const ParticipantIcon = ({ name, isSelected, onPress }) => {
+  const initials = name
+    ? name.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase()
+    : '?';
+  
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        styles.participantCircle,
+        { backgroundColor: isSelected ? '#2563EB' : '#E5E7EB' }
+      ]}
+    >
+      <Text style={[styles.participantInitials, { color: isSelected ? 'white' : '#111827' }]}>
+        {initials}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 //expense categories configuration with colors and icons
 const ExpenseCategories = [
   { id: 'food', name: 'Food & Dining', icon: 'restaurant-outline', color: '#EF4444' },
@@ -62,6 +81,9 @@ const ExpenseForm = ({
   const [loading, setLoading] = useState(false);
   const [showReceiptScanner, setShowReceiptScanner] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  useEffect(() => {
+  console.log('ExpenseForm current step:', currentStep);
+}, [currentStep]);
 
   const selectedGroup = groups.find(g => g.id === formData.groupId);
   const allMembers = selectedGroup ? selectedGroup.members : [];
@@ -163,20 +185,39 @@ const ExpenseForm = ({
   };
 
   const handleSubmit = async () => {
+    console.log("handleSubmit called");
     const error = validateForm();
     if (error) {
-      Alert.alert('Error', error);
+      console.log('Error', error);
       return;
     }
 
     setLoading(true);
+    console.log("Submitting expense");
     try {
-      await onSubmit({
-        ...formData,
+      const groupId = formData.groupId || currentUser.id;
+      // normalize participant ids before sending
+      const participantsIds = (formData.participants || [currentUser.id]).map(p => {
+        if (!p) return '';
+        if (typeof p === 'string') return p;
+        return p.id || p._id || (p.user && (p.user.id || p.user._id)) || '';
+      }).filter(Boolean);
+
+      const payload = {
+        description: formData.description,
         amount: parseFloat(formData.amount),
-        paidBy: currentUser.id,
+        currency: formData.currency || 'USD',
+        payer: currentUser.id,
+        group: groupId,
+        category: formData.category,
+        splitMethod: formData.splitMethod || 'equal',
+        participants: participantsIds.map(id => ({ user: id })),
+        notes: formData.notes || '',
+        tags: formData.tags || [],
         date: new Date().toISOString()
-      });
+      };
+      console.log('SUBMIT PAYLOAD', payload);
+      await onSubmit(payload); // submits the transformed payload
       
       // Reset form
       setFormData({
@@ -184,8 +225,8 @@ const ExpenseForm = ({
         amount: '',
         groupId: '',
         category: 'other',
-        splitType: 'equal',
-        participants: []
+        splitMethod: 'equal',
+        participants: [currentUser.id]
       });
       setCurrentStep(1);
       onClose();

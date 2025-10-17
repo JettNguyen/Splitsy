@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react';
+import api from './services/apiService';
+import { useEffect } from 'react';
 import {
   View,
   Text,
@@ -340,6 +342,14 @@ function MainApp() {
   const userGroups = getUserGroups() || [];
   const userTransactions = getUserTransactions() || [];
   const balance = calculateUserBalance() || { owed: 0, owes: 0, net: 0 };
+  console.log('Current user token:', currentUser?.token);
+
+  useEffect(() => {
+    if (currentUser?.token) {
+      api.setAuthToken(currentUser.token);
+    }
+  }, [currentUser?.token]);
+
 
   // Called when the Add Expense form is submitted.
   // Transforms UI form data into the backend transaction payload and submits it.
@@ -442,7 +452,7 @@ function MainApp() {
       <ExpenseForm
         visible={showAddExpense}
         onClose={hideAddExpenseModal}
-        onSubmit={addExpense}
+        onSubmit={(payload) => api.createTransaction(payload)}
         groups={userGroups}
         currentUser={currentUser}
       />

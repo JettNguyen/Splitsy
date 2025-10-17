@@ -13,7 +13,7 @@ const API_BASE_URL = __DEV__
 
 //api service for handling backend communication
 //backend server url (using the correct ip and port)
-const API_BASE_URL = __DEV__ ? 'http://192.168.1.242:3000/api' : 'https://your-production-api.com/api';
+//const API_BASE_URL = __DEV__ ? 'http://192.168.1.242:3000/api' : 'https://your-production-api.com/api';
 
 class ApiService {
   constructor() {
@@ -99,6 +99,8 @@ class ApiService {
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Request timed out')), 15000)
       );
+      console.log('Final request headers:', config.headers);
+
       
       const response = await Promise.race([
         fetch(url, config),
@@ -295,19 +297,22 @@ class ApiService {
 
   // Transaction methods
   async getTransactions(groupId, page = 1, limit = 20) {
-    return await this.makeRequest(`/transactions/group/${groupId}?page=${page}&limit=${limit}`);
+    return await this.makeRequest(`/transactions?group=${groupId}&page=${page}&limit=${limit}`);
   }
 
-  async createTransaction(transactionData) {
-    return await this.makeRequest('/transactions', {
-      method: 'POST',
-      body: transactionData,
-    });
-  }
+async createTransaction(transactionData) {
+  console.log('Request body:', transactionData); // debug
+  return await this.makeRequest('/transactions', {
+    method: 'POST',
+    body: transactionData, // pass object directly
+  });
+}
+
+
 
   async updateTransaction(transactionId, transactionData) {
     return await this.makeRequest(`/transactions/${transactionId}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: transactionData,
     });
   }
@@ -318,17 +323,10 @@ class ApiService {
     });
   }
 
-  // Mark a participant (or the current user) as paid for a transaction.
-  // The backend settle endpoint expects { userId?, paid?, paymentMethod? }.
-  // We keep this method simple and explicit so callers can pass the user being marked.
-  async markTransactionPaid(transactionId, userId = null, paid = true, paymentMethod = null) {
-    const body = { paymentMethod };
-    if (userId) body.userId = userId;
-    body.paid = paid;
-
+  async markTransactionPaid(transactionId, paymentMethod = null) {
     return await this.makeRequest(`/transactions/${transactionId}/settle`, {
       method: 'POST',
-      body
+      body: { paymentMethod }
     });
   }
 

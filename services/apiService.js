@@ -328,7 +328,7 @@ class ApiService {
   }
 
   async getUserBalances() {
-    return await this.makeRequest('/transactions/user/balances');
+    return await this.makeRequest(`/transactions/user/balances`);
   }
 
   // Friend request methods

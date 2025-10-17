@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,23 @@ import { useData } from '../context/ApiDataContext';
 import { useUser } from '../context/UserContext';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
 
+
+
 const ActivityScreen = () => {
   const { theme } = useTheme();
-  const { userTransactions, userGroups } = useData();
+  
+  const { userTransactions, userGroups, userBalances, fetchUserBalances } = useData();
+
   const { currentUser } = useUser();
   const [filter, setFilter] = useState('all');
+  useEffect(() => {
+  fetchUserBalances();
+}, []); // run once on mount
+
+useEffect(() => {
+  fetchUserBalances(); 
+}, [userTransactions]); // also run when transactions change
+
 
   const getFilteredActivity = () => {
     let activities = [...(userTransactions || [])];
@@ -137,6 +149,7 @@ const ActivityScreen = () => {
   const filteredActivity = getFilteredActivity();
 
   return (
+    
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView 
         style={styles.scrollContainer}
@@ -149,6 +162,21 @@ const ActivityScreen = () => {
             Recent Activity
           </Text>
         </View>
+        {/* User Balances */}
+        {userBalances && (
+          <View style={{ paddingHorizontal: 25, marginBottom: 20 }}>
+            <Text style={{ color: theme.colors.text, fontWeight: '600' }}>
+              Net Balance: ${userBalances.summary.netBalance.toFixed(2)}
+            </Text>
+            <Text style={{ color: theme.colors.textSecondary }}>
+              You are owed: ${userBalances.summary.totalOwedToMe.toFixed(2)}
+            </Text>
+            <Text style={{ color: theme.colors.textSecondary }}>
+              You owe: ${userBalances.summary.totalIOwe.toFixed(2)}
+            </Text>
+          </View>
+        )}
+
 
         {/*filter buttons*/}
         <View style={[styles.filterContainer, { backgroundColor: theme.colors.card }]}>
@@ -156,7 +184,7 @@ const ActivityScreen = () => {
           <FilterButton filterType="expenses" label="Expenses" />
           <FilterButton filterType="settlements" label="Settlements" />
         </View>
-
+      
         {/*activity list*/}
         <View style={styles.activityContainer}>
           {filteredActivity.length > 0 ? (

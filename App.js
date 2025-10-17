@@ -373,6 +373,8 @@ function MainApp() {
       }
 
   await createTransaction(payload);
+  await getUserTransactions();
+  await calculateUserBalance();
   hideAddExpenseModal();
       Alert.alert('Success', 'Expense added successfully');
     } catch (error) {
@@ -404,7 +406,11 @@ function MainApp() {
         );
       case 'activity':
         return (
-          <ActivityScreen />
+          <ActivityScreen 
+          userTransactions={userTransactions} 
+          userGroups={userGroups} 
+          userBalances={userBalances}
+        />
         );
       case 'profile':
         return (

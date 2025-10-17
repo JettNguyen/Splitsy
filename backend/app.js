@@ -20,6 +20,7 @@ const friendsRoutes = require('./routes/friends');
 
 const app = express();
 
+
 // security middleware
 app.use(helmet({ contentSecurityPolicy: false }));
 

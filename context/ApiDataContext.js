@@ -8,6 +8,8 @@ import { useUser } from './UserContext';
 //data context for managing groups and transactions
 const DataContext = createContext();
 
+
+
 export const useData = () => {
   const context = useContext(DataContext);
   if (!context) {
@@ -22,6 +24,10 @@ export const DataProvider = ({ children }) => {
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  const [userTransactions, setUserTransactions] = useState([]);
+  const [userGroups, setUserGroups] = useState([]);
+  const [userBalances, setUserBalances] = useState(null); 
 
   useEffect(() => {
     if (currentUser) {
@@ -55,6 +61,7 @@ export const DataProvider = ({ children }) => {
 
       //load user's groups
       await loadGroups();
+      await fetchUserBalances();
 
     } 
     catch (error) {
@@ -375,13 +382,13 @@ export const DataProvider = ({ children }) => {
   };
 
   const getUserTransactions = () => {
+    console.log('Calculating user transactions for user:', currentUser);
     if (!currentUser) return [];
     return transactions.filter(transaction =>
       transaction.payer._id === currentUser.id ||
       transaction.participants.some(p => p.user._id === currentUser.id)
     );
   };
-
   const calculateUserBalance = useCallback(() => {
     if (!currentUser || !Array.isArray(transactions)) {
       return { owed: 0, owes: 0, net: 0 };
@@ -417,6 +424,27 @@ export const DataProvider = ({ children }) => {
       net: totalOwed - totalOwing
     };
   }, [currentUser, transactions]);
+
+const fetchUserBalances = async () => {
+  if (!currentUser) return;
+
+  try {
+    const response = await apiService.getUserBalances();
+    console.log('Raw response from /user/balances:', response);
+
+    if (response.success && response.data) {
+      setUserBalances(response.data);
+      console.log('User balances set:', response.data);
+    } else {
+      console.warn('Failed to fetch user balances', response.message, response);
+      setUserBalances(null);
+    }
+  } catch (error) {
+    console.error('Error fetching user balances:', error);
+    setUserBalances(null);
+  }
+};
+
 
   const getGroupBalances = async (groupId) => {
     try {
@@ -468,6 +496,10 @@ export const DataProvider = ({ children }) => {
     getUserTransactions,
     loadTransactions,
     calculateUserBalance,
+    fetchUserBalances,
+    userBalances,
+    userGroups: getUserGroups(),
+    userTransactions: getUserTransactions(),
 
     clearData,
     retry,

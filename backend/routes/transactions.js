@@ -126,11 +126,13 @@ router.post('/:id/settle', protect, async (req, res) => {
 // @desc    Compute user's balances across groups and a summary
 // @access  Private
 router.get('/user/balances', protect, async (req, res) => {
+  console.log('GET /user/balances called for user:', req.user?._id);
   try {
     const userId = req.user._id;
 
     // Find groups where user is a member
     const groups = await Group.find({ 'members.user': userId }).select('id name').lean();
+    console.log('User groups for balance computation:', groups.map(g => g.name));
 
     const groupBalances = await Promise.all(groups.map(async (g) => {
       const bal = await Transaction.getUserGroupBalance(userId, g._id || g.id);

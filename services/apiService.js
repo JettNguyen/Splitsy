@@ -13,7 +13,7 @@ const API_BASE_URL = __DEV__
 
 //api service for handling backend communication
 //backend server url (using the correct ip and port)
-const API_BASE_URL = __DEV__ ? 'http://192.168.1.242:3000/api' : 'https://your-production-api.com/api';
+//const API_BASE_URL = __DEV__ ? 'http://192.168.1.242:3000/api' : 'https://your-production-api.com/api';
 
 class ApiService {
   constructor() {

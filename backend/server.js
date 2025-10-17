@@ -3,29 +3,63 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const app = require('./app');
+// No automatic in-memory fallback: require a real MongoDB in non-dev/production.
 
 const PORT = process.env.PORT || 3000;
 
 // connect to mongodb
 const connectDB = async () => {
-  try {
-    // If MONGODB_URI already contains a database name, use it as-is.
-    // Otherwise append '/splitsy' before any query string.
-    const rawUri = process.env.MONGODB_URI;
-    if (!rawUri) throw new Error('MONGODB_URI is not set in environment');
-
+  // Helper to normalize DB URI (append /splitsy if no DB path present)
+  const normalize = (rawUri) => {
+    if (!rawUri) return null;
     const [base, query] = rawUri.split('?');
-    // Check if base already contains a path like '/dbname'
     const hasDbInPath = /\/[^\/]+$/.test(base);
+    return { finalUri: hasDbInPath ? rawUri : `${base.replace(/\/$/, '')}/splitsy${query ? ('?' + query) : ''}`, hasDbInPath };
+  };
 
-    const finalUri = hasDbInPath ? rawUri : `${base.replace(/\/$/, '')}/splitsy${query ? ('?' + query) : ''}`;
-
-    await mongoose.connect(finalUri);
-    console.log('MongoDB connected to', hasDbInPath ? 'configured database (from MONGODB_URI)' : 'database: splitsy');
-  } catch (err) {
-    console.error('DB connect failed', err);
-    throw err;
+  // Try primary configured URI
+  const rawPrimary = process.env.MONGODB_URI;
+  if (rawPrimary) {
+    // Log a redacted version of the URI so operators can see host/db without secrets
+    try {
+      const u = new URL(rawPrimary);
+      console.log('Attempting MongoDB connection to host:', u.host, 'db/path:', u.pathname || '/');
+    } catch (e) {
+      // If URL parsing fails (e.g., mongodb+srv or missing protocol), show a safe redacted preview
+      const preview = rawPrimary.replace(/:\/\/.+?:.+?@/, '://<user>:<pass>@');
+      console.log('Attempting MongoDB connection to (redacted):', preview);
+    }
+    const { finalUri, hasDbInPath } = normalize(rawPrimary);
+    try {
+      await mongoose.connect(finalUri);
+      console.log('MongoDB connected to', hasDbInPath ? 'configured database (from MONGODB_URI)' : 'database: splitsy');
+      return;
+    } catch (err) {
+      console.error('DB connect failed (primary MONGODB_URI)', err && err.message ? err.message : err);
+      // fall through to fallback attempts
+    }
+  } else {
+    console.warn('MONGODB_URI is not set; attempting fallback options');
   }
+
+  // Try explicit fallback env var if provided (useful if you have a separate dev URI)
+  const rawFallback = process.env.MONGODB_URI_FALLBACK;
+  if (rawFallback) {
+    const { finalUri, hasDbInPath } = normalize(rawFallback);
+    try {
+      await mongoose.connect(finalUri);
+      console.log('MongoDB connected to', hasDbInPath ? 'configured database (from MONGODB_URI_FALLBACK)' : 'database: splitsy (from fallback)');
+      return;
+    } catch (err) {
+      console.error('DB connect failed (MONGODB_URI_FALLBACK)', err && err.message ? err.message : err);
+      // fall through to throwing below
+    }
+  }
+
+  // No in-memory fallback: fail loudly so operator can fix credentials/network.
+  const e = new Error('Unable to connect to MongoDB using provided URIs. Check MONGODB_URI, MONGODB_URI_FALLBACK, credentials, and network access.');
+  e.hint = 'If running locally, ensure your Atlas IP whitelist includes your client IP and any special characters in the password are URL-encoded.';
+  throw e;
 };
 
 let serverInstance = null;

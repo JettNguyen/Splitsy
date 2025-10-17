@@ -99,8 +99,7 @@ const ProfileScreen = ({
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <SafeAreaView style={styles.safeAreaTop} />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right', 'bottom']}> 
       <ScrollView style={[styles.scrollContainer, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.scrollContent}>
         {/*profile header*/}
         <View style={[styles.profileHeader, { backgroundColor: theme.colors.card }]}>
@@ -198,16 +197,19 @@ const ProfileScreen = ({
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-
+  </ScrollView>
       {/*edit profile modal*/}
       <Modal
         visible={showEditModal}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => setShowEditModal(false)}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
-          <View style={[styles.modalHeader, { backgroundColor: theme.colors.card }]}>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
+          <View style={styles.modalHandleWrap}>
+            <View style={[styles.modalHandle, { backgroundColor: theme.colors.textTertiary }]} />
+          </View>
+          <View style={[styles.modalHeader, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
             <TouchableOpacity onPress={() => setShowEditModal(false)}>
               <Text style={[styles.modalCloseButton, { color: theme.colors.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
@@ -217,7 +219,7 @@ const ProfileScreen = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView style={[styles.modalContent, { backgroundColor: theme.colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
             <View style={[styles.formGroup, { backgroundColor: theme.colors.card }]}>
               <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>Full Name</Text>
               <TextInput
@@ -256,7 +258,7 @@ const ProfileScreen = ({
           </ScrollView>
         </SafeAreaView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -272,12 +274,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 200,
+    paddingTop: 0,
   },
   profileHeader: {
     alignItems: 'center',
     padding: 25,
     marginHorizontal: 15,
-    marginTop: 15,
     marginBottom: 30,
     borderRadius: 16,
     shadowColor: '#673e9dff',
@@ -430,6 +432,16 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
+  },
+  modalHandleWrap: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  modalHandle: {
+    width: 48,
+    height: 5,
+    borderRadius: 3,
+    opacity: 0.6,
   },
   modalHeader: {
     flexDirection: 'row',

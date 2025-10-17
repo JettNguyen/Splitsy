@@ -6,19 +6,22 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  FlatList
+  FlatList,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet } from 'react-native';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
+import apiService from '../services/apiService';
 
 import { useData } from '../context/ApiDataContext';
-// import { useUser } from '../context/UserContext'; //for future friends management
+import { useUser } from '../context/UserContext'; // check authentication state
 
 function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }) {
   const { deleteGroup: deleteGroupAPI } = useData();
   const [activeTab, setActiveTab] = useState('friends');
+  const [requests, setRequests] = useState({ incoming: [], outgoing: [] });
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [friendEmail, setFriendEmail] = useState('');
@@ -26,6 +29,8 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
   const [selectedFriends, setSelectedFriends] = useState([]);
 
   const [friends, setFriends] = useState(userFriends || []);
+  const [selectedFriendForDetails, setSelectedFriendForDetails] = useState(null);
+  const [showFriendDetails, setShowFriendDetails] = useState(false);
 
   const [groups, setGroups] = useState([]);
   
@@ -40,63 +45,111 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
     setGroups(sanitizedGroups);
   }, [userGroups]);
 
-  const handleAddFriend = () => {
-    if (friendEmail.trim()) {
-      //friends API integration pending - ready for backend implementation
-      //const result = await sendFriendRequest(friendEmail);
-      
-      setFriendEmail('');
-      setShowAddFriend(false);
-      Alert.alert('Success', 'Friend request sent!');
-    }
-  };
+  const handleAddFriend = async () => {
+  if (!friendEmail.trim()) {
+    alert('Please enter a valid email.');
+    return;
+  }
 
-  const handleCreateGroup = () => {
+  try {
+    const result = await apiService.addFriend(friendEmail); // goes to apiService.js, addFriend method
+
+    if (result.success) {
+      // Check if the friends array exists and has changed
+      if (result.user && Array.isArray(result.user.friends)) {
+        setFriends(result.user.friends); // update UI
+        alert(`${friendEmail} has been added to your friends list!`);
+      } else {
+        alert('Friend added, but could not fetch updated friends list.');
+      }
+    } else {
+      // Show backend-provided error or fallback
+      alert(result.message || result.error || 'Failed to add friend.');
+    }
+  } catch (err) {
+    console.error('Add friend error:', err);
+    alert('An unexpected error occurred. Please try again.');
+  }
+};
+
+  const { isAuthenticated } = useUser();
+
+  React.useEffect(() => {
+    const fetchFriends = async () => {
+      try {
+        const result = await apiService.getFriends(); // make sure you have this API method
+        if (result && result.success && Array.isArray(result.friends)) {
+          setFriends(result.friends);
+        }
+      } catch (err) {
+        console.error('Error fetching friends:', err);
+      }
+    };
+
+    const fetchRequests = async () => {
+      try {
+        const res = await apiService.listFriendRequests();
+        if (res && typeof res === 'object') {
+          setRequests({ incoming: res.incoming || [], outgoing: res.outgoing || [] });
+        }
+      } catch (err) {
+        console.error('Error fetching requests:', err);
+      }
+    };
+
+    // Only fetch protected data when user is authenticated and an auth token exists
+    if (isAuthenticated && apiService.token) {
+      fetchFriends();
+      fetchRequests();
+    } else {
+      console.warn('FriendsScreen: user not authenticated or missing token; skipping friends/requests fetch');
+    }
+  }, [isAuthenticated]); // re-run when auth state changes
+
+  const { createGroup: createGroupAPI } = useData();
+
+  const handleCreateGroup = async () => {
     if (!groupName.trim()) {
       Alert.alert('Error', 'Please enter a group name');
       return;
     }
-    
-    if (selectedFriends.length === 0) {
-      Alert.alert('Error', 'Please select at least one friend for the group');
-      return;
+
+    // Prepare payload: backend accepts optional memberEmails
+    const memberEmails = selectedFriends.length > 0
+      ? friends
+          .filter(f => selectedFriends.includes(f.id) || selectedFriends.includes(f._id))
+          .map(f => f.email)
+      : [];
+
+    try {
+      const payload = { name: groupName };
+      if (memberEmails.length > 0) payload.memberEmails = memberEmails;
+
+      const newGroup = await createGroupAPI(payload);
+      if (newGroup) {
+        setGroupName('');
+        setSelectedFriends([]);
+        setShowCreateGroup(false);
+        Alert.alert('Success', 'Group created successfully!');
+      } else {
+        Alert.alert('Error', 'Failed to create group');
+      }
+    } catch (err) {
+      console.error('Create group error:', err);
+      Alert.alert('Error', err.message || 'Failed to create group');
     }
-    
-    //group creation API integrated via useData context
-    //const result = await createGroup(groupName, selectedFriends);
-    
-    setGroupName('');
-    setSelectedFriends([]);
-    setShowCreateGroup(false);
-    Alert.alert('Success', 'Group created successfully!');
   };
 
   const handleDeleteGroup = async (groupId, groupName) => {
-    Alert.alert(
-      'Delete Group',
-      `Are you sure you want to delete "${groupName}"? This action cannot be undone.`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteGroupAPI(groupId);
-              
-              setGroups(groups.filter(group => group.id !== groupId));
-              Alert.alert('Success', 'Group deleted successfully!');
-            } catch (error) {
-              console.error('Error deleting group:', error);
-              Alert.alert('Error', 'Failed to delete group. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+    // Perform delete immediately without a confirmation alert
+    try {
+      await deleteGroupAPI(groupId);
+      setGroups(prev => prev.filter(group => group.id !== groupId));
+      // no user-facing Alert per request
+    } catch (error) {
+      console.error('Error deleting group:', error);
+      // keep silent for now; could show a toast/snackbar later
+    }
   };
 
   const toggleFriendSelection = (friendId) => {
@@ -109,85 +162,152 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
 
   const renderFriendItem = ({ item }) => {
     if (!item) return null;
-    
+
     return (
-      <TouchableOpacity 
-        style={[styles.friendItem, { backgroundColor: theme.colors.card }]}
-        onPress={showCreateGroup ? () => toggleFriendSelection(item.id) : undefined}
-      >
-      <View style={styles.friendInfo}>
-        <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
-          <Text style={styles.avatarText}>{item.avatar || item.name?.[0] || 'U'}</Text>
-        </View>
-        <View style={styles.friendDetails}>
-          <Text style={[styles.friendName, { color: theme.colors.text }]}>{item.name || 'Unknown User'}</Text>
-          <Text style={[styles.friendEmail, { color: theme.colors.textSecondary }]}>{item.email || 'No email'}</Text>
-        </View>
-      </View>
-      <View style={styles.friendActions}>
-        {showCreateGroup && (
-          <View style={[
-            styles.checkbox, 
-            { 
-              backgroundColor: selectedFriends.includes(item.id) 
-                ? theme.colors.primary 
-                : 'transparent',
-              borderColor: theme.colors.primary 
-            }
-          ]}>
-            {selectedFriends.includes(item.id) && (
-              <Text style={styles.checkmark}>✓</Text>
-            )}
+      <View style={styles.cardWrapper}>
+        {/* behind-card shadow so parent clipping won't hide it */}
+        <View style={[styles.cardShadow, { shadowColor: '#673e9dff' }]} pointerEvents="none" />
+        <TouchableOpacity 
+          style={[styles.friendItem, { backgroundColor: theme.colors.card }]}
+          onPress={showCreateGroup ? () => toggleFriendSelection(item.id) : () => { setSelectedFriendForDetails(item); setShowFriendDetails(true); }}
+        >
+          <View style={styles.friendInfo}>
+            <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}> 
+              <Text style={styles.avatarText}>{item.avatar || item.name?.[0] || 'U'}</Text>
+            </View>
+            <View style={styles.friendDetails}>
+              <Text style={[styles.friendName, { color: theme.colors.text }]}>{item.name || 'Unknown User'}</Text>
+              <Text style={[styles.friendEmail, { color: theme.colors.textSecondary }]}>{item.email || 'No email'}</Text>
+            </View>
           </View>
-        )}
-        <View style={[
-          styles.statusDot, 
-          { backgroundColor: (item.status === 'online') ? theme.colors.success : theme.colors.textSecondary }
-        ]} />
+
+          <View style={styles.friendActions}>
+            {showCreateGroup && (
+              <View style={[
+                styles.checkbox, 
+                { 
+                  backgroundColor: selectedFriends.includes(item.id) 
+                    ? theme.colors.primary 
+                    : 'transparent',
+                  borderColor: theme.colors.primary 
+                }
+              ]}>
+                {selectedFriends.includes(item.id) && (
+                  <Text style={styles.checkmark}>✓</Text>
+                )}
+              </View>
+            )}
+
+            <View style={[
+              styles.statusDot, 
+              { backgroundColor: (item.status === 'online') ? theme.colors.success : theme.colors.textSecondary }
+            ]} />
+
+          </View>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
     );
+  };
+
+  // Friend details modal handlers
+  const handleRemoveSelectedFriend = async (friend) => {
+    // Try removing by id first; if server reports not found or not-in-list, try by email
+    const tryRemove = async (identifier) => {
+      try {
+        const res = await apiService.removeFriend(identifier);
+        return res;
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    };
+
+    let res = await tryRemove(friend.id || friend._id);
+    if (!res || !res.success) {
+      const message = res?.message || res?.error || '';
+      // If not found / not in list, try fallback with email if available
+      if (friend.email && (message.includes('not found') || message.includes('not in your friends') || message.includes('not in your friends list') || message.includes('Friend not found'))) {
+        res = await tryRemove(friend.email);
+      }
+    }
+
+    if (res && res.success) {
+      setFriends(res.friends || []);
+      Alert.alert('Removed', 'Friend removed successfully');
+      setShowFriendDetails(false);
+      setSelectedFriendForDetails(null);
+    } else {
+      const message = res?.message || res?.error || 'Failed to remove friend';
+      Alert.alert('Error', message);
+    }
+  };
+
+  const handleAccept = async (requestId) => {
+    try {
+      await apiService.acceptFriendRequest(requestId);
+      // refresh requests and friends
+      const r = await apiService.listFriendRequests();
+      setRequests({ incoming: r.incoming || [], outgoing: r.outgoing || [] });
+      const f = await apiService.getFriends();
+      if (f && f.friends) setFriends(f.friends);
+    } catch (err) {
+      console.error('Accept error:', err);
+      Alert.alert('Error', 'Unable to accept request');
+    }
+  };
+
+  const handleDecline = async (requestId) => {
+    try {
+      await apiService.declineFriendRequest(requestId);
+      const r = await apiService.listFriendRequests();
+      setRequests({ incoming: r.incoming || [], outgoing: r.outgoing || [] });
+    } catch (err) {
+      console.error('Decline error:', err);
+      Alert.alert('Error', 'Unable to decline request');
+    }
   };
 
   const renderGroupItem = ({ item }) => {
     if (!item) return null;
     
     return (
-      <View style={[styles.groupItem, { backgroundColor: theme.colors.card }]}>
-        <TouchableOpacity 
-          style={styles.groupContent}
-          onLongPress={() => handleDeleteGroup(item.id, item.name)}
-        >
-          <View style={styles.groupHeader}>
-            <View style={[styles.groupIcon, { backgroundColor: theme.colors.primary }]}>
-              <Text style={styles.groupIconText}>👥</Text>
+      <View style={styles.cardWrapper}>
+        <View style={[styles.cardShadow, { shadowColor: '#673e9dff' }]} pointerEvents="none" />
+        <View style={[styles.groupItem, { backgroundColor: theme.colors.card }]}>
+          <TouchableOpacity 
+            style={styles.groupContent}
+            onLongPress={() => handleDeleteGroup(item.id, item.name)}
+          >
+            <View style={styles.groupHeader}>
+              <View style={[styles.groupIcon, { backgroundColor: theme.colors.primary }]}>
+                <Text style={styles.groupIconText}>👥</Text>
+              </View>
+              <View style={styles.groupDetails}>
+                <Text style={[styles.groupName, { color: theme.colors.text }]}>{item.name || 'Untitled Group'}</Text>
+                <Text style={[styles.groupMembers, { color: theme.colors.textSecondary }]}>
+                  {item.memberCount || 0} members • {item.lastActivity || 'No activity'}
+                </Text>
+              </View>
+              <View style={styles.groupAmount}>
+                <Text style={[styles.amountText, { color: theme.colors.primary }]}>
+                  ${(item.totalOwed || 0).toFixed(2)}
+                </Text>
+              </View>
             </View>
-            <View style={styles.groupDetails}>
-              <Text style={[styles.groupName, { color: theme.colors.text }]}>{item.name || 'Untitled Group'}</Text>
-              <Text style={[styles.groupMembers, { color: theme.colors.textSecondary }]}>
-                {item.memberCount || 0} members • {item.lastActivity || 'No activity'}
+            <View style={styles.membersList}>
+              <Text style={[styles.membersText, { color: theme.colors.textSecondary }]}>
+                {(item.members && item.members.length > 0) ? item.members.join(', ') : 'No members'}
               </Text>
             </View>
-            <View style={styles.groupAmount}>
-              <Text style={[styles.amountText, { color: theme.colors.primary }]}>
-                ${(item.totalOwed || 0).toFixed(2)}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.membersList}>
-            <Text style={[styles.membersText, { color: theme.colors.textSecondary }]}>
-              {(item.members && item.members.length > 0) ? item.members.join(', ') : 'No members'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-        
-        {/*delete button*/}
-        <TouchableOpacity
-          style={[styles.deleteButton, { backgroundColor: theme.colors.error }]}
-          onPress={() => handleDeleteGroup(item.id, item.name)}
-        >
-          <Text style={styles.deleteButtonText}>🗑️</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
+          
+          {/*delete button*/}
+          <TouchableOpacity
+            style={[styles.deleteButton, { backgroundColor: theme.colors.error }]}
+            onPress={() => handleDeleteGroup(item.id, item.name)}
+          >
+            <Text style={styles.deleteButtonText}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -235,9 +355,11 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
             <FlatList
               data={friends}
               renderItem={renderFriendItem}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item, index) => item._id || item.id || `friend-${index}`}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.listContent}
+              removeClippedSubviews={false}
+              nestedScrollEnabled={true}
             />
           ) : (
             <View style={styles.emptyState}>
@@ -249,6 +371,59 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
         </View>
       );
     } else {
+      if (activeTab === 'requests') {
+        return (
+          <View style={styles.tabContent}>
+            <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>Incoming Requests</Text>
+            {requests.incoming.length > 0 ? (
+              <FlatList
+                data={requests.incoming}
+                keyExtractor={(item, index) => item.id || item._id || `inc-${index}`}
+                renderItem={({ item }) => (
+                  <View style={[styles.requestItem, { backgroundColor: theme.colors.card }]}> 
+                    <View style={styles.requestInfo}>
+                      <Text style={{ color: theme.colors.text }}>{item.from?.name || item.from?.email || 'Unknown'}</Text>
+                      <Text style={{ color: theme.colors.textSecondary }}>{item.message || ''}</Text>
+                    </View>
+                    <View style={styles.requestActions}>
+                      <TouchableOpacity style={[styles.acceptBtn, { backgroundColor: theme.colors.success }]} onPress={() => handleAccept(item.id || item._id)}>
+                        <Text style={styles.actionText}>Accept</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.declineBtn, { backgroundColor: theme.colors.error }]} onPress={() => handleDecline(item.id || item._id)}>
+                        <Text style={styles.actionText}>Decline</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              />
+            ) : (
+              <Text style={{ color: theme.colors.textSecondary }}>No incoming requests</Text>
+            )}
+
+            <Text style={[styles.sectionLabel, { color: theme.colors.text, marginTop: 16 }]}>Outgoing Requests</Text>
+            {requests.outgoing.length > 0 ? (
+              <FlatList
+                data={requests.outgoing}
+                keyExtractor={(item, index) => item.id || item._id || `out-${index}`}
+                renderItem={({ item }) => (
+                  <View style={[styles.requestItem, { backgroundColor: theme.colors.card }]}> 
+                    <View style={styles.requestInfo}>
+                      <Text style={{ color: theme.colors.text }}>{item.to?.name || item.to?.email || 'Unknown'}</Text>
+                      <Text style={{ color: theme.colors.textSecondary }}>{item.message || ''}</Text>
+                    </View>
+                    <View style={styles.requestActions}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Pending</Text>
+                    </View>
+                  </View>
+                )}
+              />
+            ) : (
+              <Text style={{ color: theme.colors.textSecondary }}>No outgoing requests</Text>
+            )}
+          </View>
+        );
+      }
+      
       return (
         <View style={styles.tabContent}>
           {/*create group section*/}
@@ -270,7 +445,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
               <FlatList
                 data={friends}
                 renderItem={renderFriendItem}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item, index) => item._id || item.id || `friend-${index}`}
                 style={styles.friendSelection}
                 showsVerticalScrollIndicator={false}
               />
@@ -300,9 +475,11 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
               <FlatList
                 data={groups}
                 renderItem={renderGroupItem}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item, index) => item._id || item.id || `group-${index}`}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.listContent}
+                removeClippedSubviews={false}
+                nestedScrollEnabled={true}
               />
             </>
           ) : (
@@ -331,10 +508,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
             if (activeTab === 'friends') {
               setShowAddFriend(true);
             } else {
-              if (friends.length === 0) {
-                Alert.alert('No Friends', 'Add friends first to create a group');
-                return;
-              }
+              // Allow creating a group even if the user has no friends yet.
               setShowCreateGroup(true);
             }
           }}
@@ -377,6 +551,33 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
 
       {/*tab content*/}
       {renderTabContent()}
+
+      {/* Friend details modal */}
+      {selectedFriendForDetails && (
+        <Modal
+          visible={showFriendDetails}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); }}
+        >
+          <TouchableOpacity activeOpacity={1} style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); }}>
+            <SafeAreaView style={[styles.modalContainer, { justifyContent: 'center', alignItems: 'center' }]}> 
+              <TouchableOpacity activeOpacity={1} style={[styles.friendDetailsModal, { backgroundColor: theme.colors.card }]}>
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{selectedFriendForDetails.name || 'Friend'}</Text>
+                <Text style={{ color: theme.colors.textSecondary, marginBottom: 12 }}>{selectedFriendForDetails.email}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                  <TouchableOpacity style={[styles.cancelButton, { borderColor: theme.colors.textSecondary, marginRight: 8 }]} onPress={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); }}>
+                    <Text style={{ color: theme.colors.textSecondary }}>Close</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.error }]} onPress={() => handleRemoveSelectedFriend(selectedFriendForDetails)}>
+                    <Text style={styles.addButtonText}>Remove Friend</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            </SafeAreaView>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -522,7 +723,26 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.5,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 6,
+  },
+  cardWrapper: {
+    marginBottom: 12,
+    // keep overflow visible so shadows show
+    overflow: 'visible',
+    zIndex: 5,
+  },
+  cardShadow: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    top: 6,
+    bottom: -6,
+    borderRadius: 14,
+    backgroundColor: 'transparent',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   friendInfo: {
     flexDirection: 'row',
@@ -561,6 +781,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  removeFriendButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
   checkbox: {
     width: 24,
     height: 24,
@@ -596,7 +821,7 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.5,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 6,
   },
   groupHeader: {
     flexDirection: 'row',
@@ -654,6 +879,39 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
+  requestItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 0.5,
+    borderColor: 'rgba(148, 163, 184, 0.15)'
+  },
+  requestInfo: {
+    flex: 1,
+    paddingRight: 8
+  },
+  requestActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center'
+  },
+  acceptBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8
+  },
+  declineBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8
+  },
+  actionText: {
+    color: 'white',
+    fontWeight: '600'
+  },
   helpText: {
     fontSize: 14,
     textAlign: 'center',
@@ -684,6 +942,27 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     fontSize: 14,
     color: 'white',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)'
+  },
+  friendDetailsModal: {
+    width: '90%',
+    borderRadius: 12,
+    padding: 20,
+    // ensure the modal content doesn't push to top
+    alignItems: 'flex-start'
+  },
+  modalContainer: {
+    flex: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 6,
   },
 });
 

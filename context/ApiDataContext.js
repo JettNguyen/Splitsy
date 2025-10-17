@@ -44,6 +44,15 @@ export const DataProvider = ({ children }) => {
       //initialize api service
       await apiService.init();
 
+      // If there's no auth token after init, don't call protected endpoints.
+      // This avoids noisy 401 logs when the app has a local cached user but no valid token.
+      if (!apiService.token) {
+        console.warn('ApiDataContext: no auth token available; skipping protected data load');
+        setGroups([]);
+        setTransactions([]);
+        return;
+      }
+
       //load user's groups
       await loadGroups();
 
@@ -61,13 +70,18 @@ export const DataProvider = ({ children }) => {
     try {
       const response = await apiService.getGroups();
 
+      // Acceptable shapes from backend:
+      // - array of groups
+      // - { success: true, data: { groups: [...] } }
+      // - a single group object
       if (Array.isArray(response)) {
         setGroups(response);
-      } 
-      else if (response.success && response.data && response.data.groups) {
+      } else if (response && response.success && response.data && Array.isArray(response.data.groups)) {
         setGroups(response.data.groups);
-      } 
-      else {
+      } else if (response && typeof response === 'object' && response.id) {
+        // single group object returned
+        setGroups([response]);
+      } else {
         setGroups([]);
       }
     } 
@@ -81,8 +95,16 @@ export const DataProvider = ({ children }) => {
   const loadTransactions = async (groupId) => {
     try {
       const response = await apiService.getTransactions(groupId);
-      if (response.success) {
-        return response.data.transactions || [];
+      // Backend may return different shapes:
+      // - { success: true, data: [tx, ...] }
+      // - { success: true, data: { transactions: [...] } }
+      // - directly an array
+      if (response && response.success) {
+        const payload = response.data ?? response;
+        if (Array.isArray(payload)) return payload;
+        if (Array.isArray(payload.transactions)) return payload.transactions;
+        if (Array.isArray(payload.data)) return payload.data;
+        return [];
       }
     } 
     catch (error) {
@@ -109,6 +131,7 @@ export const DataProvider = ({ children }) => {
   };
 
   const createGroup = async (groupData) => {
+    // Create a new group on the backend, then append it to local state.
     try {
       setError(null);
       const response = await apiService.createGroup(groupData);
@@ -241,17 +264,19 @@ export const DataProvider = ({ children }) => {
   };
 
   const createTransaction = async (transactionData) => {
+    // Send a new transaction to the backend and update local cache.
     try {
       setError(null);
       const response = await apiService.createTransaction(transactionData);
-      
-      if (response.success) {
-        const newTransaction = response.data.transaction;
-        setTransactions(prevTransactions => [newTransaction, ...prevTransactions]);
-        
-        await loadGroups();
-        
-        return newTransaction;
+
+      if (response && response.success) {
+        // normalize possible shapes
+        const newTransaction = response.data?.transaction ?? response.data ?? response.transaction ?? null;
+        if (newTransaction) {
+          setTransactions(prevTransactions => [newTransaction, ...prevTransactions]);
+          await loadGroups();
+          return newTransaction;
+        }
       }
     } 
     catch (error) {
@@ -265,18 +290,18 @@ export const DataProvider = ({ children }) => {
     try {
       setError(null);
       const response = await apiService.updateTransaction(transactionId, transactionData);
-      
-      if (response.success) {
-        const updatedTransaction = response.data.transaction;
-        setTransactions(prevTransactions => 
-          prevTransactions.map(transaction => 
-            transaction._id === transactionId ? updatedTransaction : transaction
-          )
-        );
-        
-        await loadGroups();
-        
-        return updatedTransaction;
+
+      if (response && response.success) {
+        const updatedTransaction = response.data?.transaction ?? response.data ?? response.transaction ?? null;
+        if (updatedTransaction) {
+          setTransactions(prevTransactions => 
+            prevTransactions.map(transaction => 
+              transaction._id === transactionId ? updatedTransaction : transaction
+            )
+          );
+          await loadGroups();
+          return updatedTransaction;
+        }
       }
     } 
     catch (error) {
@@ -290,12 +315,11 @@ export const DataProvider = ({ children }) => {
     try {
       setError(null);
       const response = await apiService.deleteTransaction(transactionId);
-      
-      if (response.success) {
+
+      if (response && response.success) {
         setTransactions(prevTransactions => 
           prevTransactions.filter(transaction => transaction._id !== transactionId)
         );
-        
         await loadGroups();
       }
     } 
@@ -307,19 +331,21 @@ export const DataProvider = ({ children }) => {
   };
 
   const markTransactionPaid = async (transactionId, userId, paid = true) => {
+    // Mark a participant as paid in a transaction; update the local transactions list.
     try {
       setError(null);
       const response = await apiService.markTransactionPaid(transactionId, userId, paid);
-      
-      if (response.success) {
-        const updatedTransaction = response.data.transaction;
-        setTransactions(prevTransactions => 
-          prevTransactions.map(transaction => 
-            transaction._id === transactionId ? updatedTransaction : transaction
-          )
-        );
-        
-        return updatedTransaction;
+
+      if (response && response.success) {
+        const updatedTransaction = response.data?.transaction ?? response.data ?? response.transaction ?? null;
+        if (updatedTransaction) {
+          setTransactions(prevTransactions => 
+            prevTransactions.map(transaction => 
+              transaction._id === transactionId ? updatedTransaction : transaction
+            )
+          );
+          return updatedTransaction;
+        }
       }
     } 
     catch (error) {

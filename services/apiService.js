@@ -1,4 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+
+// api service for handling backend communication
+// Read IP and PORT from Expo runtime config (app.json extra) if available.
+// Avoid static `@env` import to keep bundler from failing when that plugin isn't configured.
+const extra = (Constants && (Constants.manifest && Constants.manifest.extra)) || (Constants && Constants.expoConfig && Constants.expoConfig.extra) || {};
+const IP_ADDRESS = extra.IP_ADDRESS || '192.168.0.38';
+const PORT = extra.PORT || '3000';
+const API_BASE_URL = __DEV__
+  ? `http://${IP_ADDRESS}:${PORT}/api`
+  : 'https://your-production-api.com/api';
 
 //api service for handling backend communication
 //backend server url (using the correct ip and port)
@@ -13,9 +24,17 @@ class ApiService {
   //initialize the service and load stored token
   async init() {
     try {
+      // If token is already set in-memory (e.g. just after login), prefer that to avoid
+      // a race where AsyncStorage hasn't been written yet.
+      if (this.token) {
+        console.log('ApiService.init: token already present in memory');
+        return;
+      }
+
       const token = await AsyncStorage.getItem('authToken');
       if (token) {
         this.token = token;
+        console.log('ApiService.init: token loaded (present in storage)');
       }
     } catch (error) {
       console.error('Error loading token:', error);
@@ -23,12 +42,18 @@ class ApiService {
   }
 
   //set authentication token
-  setAuthToken(token) {
+  async setAuthToken(token) {
     this.token = token;
-    if (token) {
-      AsyncStorage.setItem('authToken', token);
-    } else {
-      AsyncStorage.removeItem('authToken');
+    try {
+      if (token) {
+        await AsyncStorage.setItem('authToken', token);
+        console.log('ApiService.setAuthToken: token set');
+      } else {
+        await AsyncStorage.removeItem('authToken');
+        console.log('ApiService.setAuthToken: token cleared');
+      }
+    } catch (e) {
+      console.error('ApiService.setAuthToken: storage error', e);
     }
   }
 
@@ -48,11 +73,20 @@ class ApiService {
   //generic api call method
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
+    // Debug: show whether a token is present at call time (redacted)
+    try {
+      const tokenPreview = this.token ? `${this.token.slice(0, 6)}...` : null;
+      console.log('ApiService.makeRequest:', options.method || 'GET', url, 'hasAuth=', !!this.token, 'tokenPreview=', tokenPreview);
+    } catch (e) {
+      // swallow logging errors
+    }
     
+    // Merge headers so callers can pass additional headers without removing Authorization
+    const mergedHeaders = { ...this.getAuthHeaders(), ...(options.headers || {}) };
     const config = {
-      method: 'GET',
-      headers: this.getAuthHeaders(),
+      method: options.method || 'GET',
       ...options,
+      headers: mergedHeaders,
     };
 
     // Convert body to JSON if it exists
@@ -81,25 +115,30 @@ class ApiService {
         data = await response.text();
       }
 
+  // Treat non-2xx responses as errors and provide friendly messages
       if (!response.ok) {
+        // Prefer server-provided message when available
+        const serverMessage = (data && data.message) ? data.message : null;
         // Handle different HTTP error codes
         if (response.status === 401) {
           // Token expired or invalid
           this.setAuthToken(null);
-          throw new Error('Authentication failed. Please log in again.');
+          throw new Error(serverMessage || 'Authentication failed. Please log in again.');
         } else if (response.status === 403) {
-          throw new Error('Access denied.');
+          throw new Error(serverMessage || 'Access denied.');
         } else if (response.status === 404) {
-          throw new Error('Resource not found.');
+          throw new Error(serverMessage || 'Resource not found.');
         } else if (response.status >= 500) {
-          throw new Error('Server error. Please try again later.');
+          throw new Error(serverMessage || 'Server error. Please try again later.');
         } else {
-          throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+          throw new Error(serverMessage || (data && typeof data === 'string' ? data : `HTTP ${response.status}: ${response.statusText}`));
         }
       }
 
+      // Parsed response (JSON or text)
       return data;
     } catch (error) {
+      // Log some context to help debugging during development
       console.error(`API Error [${config.method} ${url}]:`, error.message);
       console.error('Request details:', {
         url,
@@ -114,6 +153,7 @@ class ApiService {
       if (error.message.includes('timed out') || error.message.includes('Request timed out')) {
         throw new Error('Network request timed out');
       }
+      // Re-throw the error for callers to handle (DataContext shows alerts)
       throw error;
     }
   }
@@ -127,7 +167,7 @@ class ApiService {
       });
 
       if (response.token) {
-        this.setAuthToken(response.token);
+        await this.setAuthToken(response.token);
         return { success: true, user: response.user, token: response.token };
       }
 
@@ -145,7 +185,7 @@ class ApiService {
       });
 
       if (response.token) {
-        this.setAuthToken(response.token);
+        await this.setAuthToken(response.token);
         return { success: true, user: response.user, token: response.token };
       }
 
@@ -156,7 +196,7 @@ class ApiService {
   }
 
   async logout() {
-    this.setAuthToken(null);
+    await this.setAuthToken(null);
     return { success: true, message: 'Logged out successfully' };
   }
 
@@ -278,15 +318,46 @@ class ApiService {
     });
   }
 
-  async markTransactionPaid(transactionId, paymentMethod = null) {
+  // Mark a participant (or the current user) as paid for a transaction.
+  // The backend settle endpoint expects { userId?, paid?, paymentMethod? }.
+  // We keep this method simple and explicit so callers can pass the user being marked.
+  async markTransactionPaid(transactionId, userId = null, paid = true, paymentMethod = null) {
+    const body = { paymentMethod };
+    if (userId) body.userId = userId;
+    body.paid = paid;
+
     return await this.makeRequest(`/transactions/${transactionId}/settle`, {
       method: 'POST',
-      body: { paymentMethod }
+      body
     });
   }
 
   async getUserBalances() {
     return await this.makeRequest('/transactions/user/balances');
+  }
+
+  // Friend request methods
+  async sendFriendRequest(toId, message = '') {
+    return await this.makeRequest('/users/requests', {
+      method: 'POST',
+      body: { toId, message }
+    });
+  }
+
+  async listFriendRequests() {
+    return await this.makeRequest('/users/requests');
+  }
+
+  async acceptFriendRequest(requestId) {
+    return await this.makeRequest(`/users/requests/${requestId}/accept`, {
+      method: 'POST'
+    });
+  }
+
+  async declineFriendRequest(requestId) {
+    return await this.makeRequest(`/users/requests/${requestId}`, {
+      method: 'DELETE'
+    });
   }
 
   // Utility methods
@@ -295,6 +366,34 @@ class ApiService {
       headers: { 'Content-Type': 'application/json' } // Don't include auth for health check
     });
   }
+
+  // add friend method
+  async addFriend(friendEmail) {
+  return await this.makeRequest('/users/add-friend', { // bridge between frontend and backend
+    method: 'POST', 
+    body: { email: friendEmail }
+  });
+}
+ // get friends method
+  async getFriends() {
+    return await this.makeRequest('/users/friends', {
+      method: 'GET',
+    });
+  }
+
+  // Remove/unfriend a user (mutual removal)
+  async removeFriend(friendId) {
+    const encoded = encodeURIComponent(String(friendId));
+    return await this.makeRequest(`/users/friends/${encoded}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // Debug: return authenticated user and populated friends (dev only)
+  async getDebugUser() {
+    return await this.makeRequest('/users/debug');
+  }
+
 }
 
 // Create singleton instance

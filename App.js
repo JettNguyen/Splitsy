@@ -321,7 +321,7 @@ function useModalState(initialState = false) {
 function MainApp() {
   const { theme, isLoading: themeLoading } = useTheme();
   const { currentUser, isAuthenticated, userLoading } = useUser();
-  const { groups, getUserGroups, getUserTransactions, calculateUserBalance, dataLoading } = useData();
+  const { groups, getUserGroups, getUserTransactions, calculateUserBalance, dataLoading, createTransaction } = useData();
   
   const [activeTab, setActiveTab] = useState('home');
   const [showAddExpense, showAddExpenseModal, hideAddExpenseModal] = useModalState();
@@ -341,10 +341,37 @@ function MainApp() {
   const userTransactions = getUserTransactions() || [];
   const balance = calculateUserBalance() || { owed: 0, owes: 0, net: 0 };
 
+  // Called when the Add Expense form is submitted.
+  // Transforms UI form data into the backend transaction payload and submits it.
   const addExpense = async (expenseData) => {
     try {
-      // Add expense logic here
-      setShowAddExpense(false);
+      // Transform the expenseData into API payload
+      const amount = parseFloat(expenseData.amount);
+      // normalize participants: they might be ids or objects; ensure { user } shape
+      const participants = (expenseData.participants || []).map(id => ({ user: id }));
+
+      // For now, do equal split calculation
+      const perPerson = Math.round((amount / participants.length) * 100) / 100;
+      let remaining = Math.round((amount - perPerson * participants.length) * 100) / 100;
+      const participantsWithAmounts = participants.map((p, idx) => {
+        const adj = idx === 0 ? remaining : 0; // first participant gets rounding remainder
+        return { user: p.user, amount: Math.round((perPerson + adj) * 100) / 100 };
+      });
+
+      // Build final payload the backend expects
+      const payload = {
+        description: expenseData.description,
+        amount,
+        group: expenseData.groupId,
+        payer: currentUser.id || currentUser._id,
+        category: expenseData.category || 'other',
+        splitMethod: expenseData.splitType || 'equal',
+        participants: participantsWithAmounts,
+        notes: expenseData.notes || ''
+      };
+
+  await createTransaction(payload);
+  hideAddExpenseModal();
       Alert.alert('Success', 'Expense added successfully');
     } catch (error) {
       Alert.alert('Error', 'Failed to add expense');

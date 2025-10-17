@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import React, { useState, useEffect} from 'react';
 import {
   View,
@@ -70,7 +69,7 @@ const ExpenseForm = ({
     groupId: '',
     category: 'other',
     splitType: 'equal',
-    participants: [],
+    participants: [currentUser.id], // default to current user
     items: [], // itemized list: { id, name, price, quantity, assignees: [userIds] }
     entryMode: 'scan', // 'scan' or 'manual'
     ...initialData
@@ -173,8 +172,10 @@ const ExpenseForm = ({
     if (!formData.amount || isNaN(parseFloat(formData.amount)) || parseFloat(formData.amount) <= 0) {
       return 'Please enter a valid amount';
     }
-    if (!formData.groupId && (!formData.participants || formData.participants.length === 0)) return 'Please select a group or at least one friend';
-    // if exact split, ensure participant amounts don't exceed total
+    if (!formData.groupId && (!formData.participants || formData.participants.length === 0)) {
+      updateFormData('participants', [currentUser.id]);
+    }
+// if exact split, ensure participant amounts don't exceed total
     if (formData.splitType === 'exact') {
       const amountNum = parseFloat(formData.amount) || 0;
       const custom = formData.customAmounts || {};

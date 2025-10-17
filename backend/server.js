@@ -1,5 +1,19 @@
 //splitsy backend server - express.js api with mongodb
 const path = require('path');
+
+// Try to load validator mitigation as early as possible. In fresh clones the
+// utils file might be missing if it wasn't committed; log a clear message so
+// developers see the cause instead of a cryptic module-not-found from deeper
+// requires. This does not throw — it logs and continues so the server can
+// start (or fail later) with a clear diagnostic.
+try {
+  const mitigationPath = path.join(__dirname, 'utils', 'validator-mitigation.js');
+  require(mitigationPath);
+  console.log('Loaded validator mitigation from', mitigationPath);
+} catch (err) {
+  console.warn('validator mitigation not found at backend/utils/validator-mitigation.js — continuing without it');
+}
+
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const app = require('./app');

@@ -362,13 +362,15 @@ function MainApp() {
       const payload = {
         description: expenseData.description,
         amount,
-        group: expenseData.groupId,
         payer: currentUser.id || currentUser._id,
         category: expenseData.category || 'other',
         splitMethod: expenseData.splitType || 'equal',
         participants: participantsWithAmounts,
         notes: expenseData.notes || ''
       };
+     if (expenseData.groupId) {
+        payload.group = expenseData.groupId;
+      }
 
   await createTransaction(payload);
   hideAddExpenseModal();

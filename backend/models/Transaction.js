@@ -26,7 +26,7 @@ const transactionSchema = new mongoose.Schema({
   group: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Group',
-    required: [true, 'Group is required']
+    required: [false]
   },
   category: {
     type: String,

@@ -38,11 +38,13 @@ router.post('/', protect, async (req, res) => {
 
     // Update group's totals asynchronously (best-effort)
     try {
-      const group = await Group.findById(tx.group);
-      if (group) await group.updateTotals();
-    } catch (err) {
-      console.warn('Failed to update group totals after creating transaction', err.message);
-    }
+        if (tx.group) { // <-- check that group is truthy
+          const group = await Group.findById(tx.group);
+          if (group) await group.updateTotals();
+        }
+      } catch (err) {
+        console.warn('Failed to update group totals after creating transaction', err.message);
+      }
 
     return res.status(201).json({ success: true, data: tx });
   } catch (error) {

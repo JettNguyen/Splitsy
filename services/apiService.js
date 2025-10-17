@@ -4,7 +4,6 @@ import Constants from 'expo-constants';
 //api service for handling backend communication
 //backend server url (using the correct ip and port)
 const { IP_ADDRESS, PORT, PROD_API_URL } = Constants.expoConfig.extra;
-console.log('ApiService: Configured IP_ADDRESS=', IP_ADDRESS, 'PORT=', PORT, 'PROD_API_URL=', PROD_API_URL);
 export const API_BASE_URL = __DEV__
   ? `http://${IP_ADDRESS}:${PORT}/api`
   : PROD_API_URL;
@@ -292,12 +291,14 @@ class ApiService {
     return await this.makeRequest(`/transactions/group/${groupId}?page=${page}&limit=${limit}`);
   }
 
-  async createTransaction(transactionData) {
-    return await this.makeRequest('/transactions', {
-      method: 'POST',
-      body: transactionData,
-    });
-  }
+ async createTransaction(transactionData) {
+  console.log('Request body:', transactionData); // debug
+  return await this.makeRequest('/transactions', {
+    method: 'POST',
+    body: transactionData, // pass object directly
+  });
+}
+
 
   async updateTransaction(transactionId, transactionData) {
     return await this.makeRequest(`/transactions/${transactionId}`, {

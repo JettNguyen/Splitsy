@@ -18,22 +18,14 @@ const groupSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  members: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    role: {
-      type: String,
-      enum: ['admin', 'member'],
-      default: 'member'
-    },
-    joinedAt: {
-      type: Date,
-      default: Date.now
-    }
+  members: {
+  type: [{
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    role: { type: String, enum: ['admin', 'member'], default: 'member' },
+    joinedAt: { type: Date, default: Date.now }
   }],
+  default: []
+},
   currency: {
     type: String,
     default: 'USD',
@@ -99,19 +91,16 @@ const groupSchema = new mongoose.Schema({
   }
 });
 
-// Virtual for member count
 groupSchema.virtual('memberCount').get(function() {
-  return this.members.length;
+  return Array.isArray(this.members) ? this.members.length : 0;
 });
 
-// Virtual for unsettled amount
 groupSchema.virtual('unsettledAmount').get(function() {
-  return this.totalExpenses - this.settledExpenses;
+  return (this.totalExpenses || 0) - (this.settledExpenses || 0);
 });
 
-// Virtual for balance status
 groupSchema.virtual('isBalanced').get(function() {
-  return this.totalExpenses === this.settledExpenses;
+  return (this.totalExpenses || 0) === (this.settledExpenses || 0);
 });
 
 // Index for better query performance

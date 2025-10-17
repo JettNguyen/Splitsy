@@ -109,7 +109,6 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
   const { createGroup: createGroupAPI } = useData();
 
   const handleCreateGroup = async () => {
->>>>>>> ea00ab74fa6b6df7bd9ae253c9b09adeb1f00078
     if (!groupName.trim()) {
       Alert.alert('Error', 'Please enter a group name');
       return;
@@ -356,11 +355,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
             <FlatList
               data={friends}
               renderItem={renderFriendItem}
-<<<<<<< HEAD
-              keyExtractor={(item) => item._id}
-=======
               keyExtractor={(item, index) => item._id || item.id || `friend-${index}`}
->>>>>>> ea00ab74fa6b6df7bd9ae253c9b09adeb1f00078
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.listContent}
               removeClippedSubviews={false}

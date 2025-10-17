@@ -1,5 +1,10 @@
 // Apply runtime mitigations for known upstream advisories before loading validation libs
-require('./utils/validator-mitigation');
+// The mitigation file is optional for fresh clones; load it if present and warn if missing.
+try {
+  require('./utils/validator-mitigation');
+} catch (err) {
+  console.warn('validator mitigation not found at backend/utils/validator-mitigation.js — continuing without it');
+}
 
 const express = require('express');
 const cors = require('cors');

@@ -24,10 +24,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.4",
-<<<<<<< HEAD
     "react-native-dotenv": "^3.4.11",
-=======
->>>>>>> ea00ab74fa6b6df7bd9ae253c9b09adeb1f00078
     "react-native-safe-area-context": "^5.6.1",
     "react-native-web": "^0.21.0"
   },

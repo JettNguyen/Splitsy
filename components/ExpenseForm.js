@@ -1,22 +1,21 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   ScrollView,
   TextInput,
   Alert,
   Modal,
-  SafeAreaView
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-//context and components
 import { useTheme } from '../context/ThemeContext';
 import ReceiptScanner from './ReceiptScanner';
 
-//expense categories configuration with colors and icons
 const ExpenseCategories = [
   { id: 'food', name: 'Food & Dining', icon: 'restaurant-outline', color: '#EF4444' },
   { id: 'groceries', name: 'Groceries', icon: 'basket-outline', color: '#10B981' },
@@ -29,18 +28,16 @@ const ExpenseCategories = [
   { id: 'other', name: 'Other', icon: 'ellipse-outline', color: '#7C3AED' }
 ];
 
-//main expense form component with 3-step process
-const ExpenseForm = ({ 
-  visible, 
-  onClose, 
-  onSubmit, 
-  groups, 
+const ExpenseForm = ({
+  visible,
+  onClose,
+  onSubmit,
+  groups,
   currentUser,
   initialData = {}
 }) => {
   const { theme } = useTheme();
-  
-  //form state management
+
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
@@ -48,13 +45,21 @@ const ExpenseForm = ({
     category: 'other',
     splitType: 'equal',
     participants: [],
+    items: [],            //data from receipt
+    subtotal: 0,
+    service_charge: 0,
     ...initialData
   });
-  
-  //ui state management
+
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showReceiptScanner, setShowReceiptScanner] = useState(false);
+
+  // “unit” assignments for Split by Item (expand qty → units)
+  const [unitAssignments, setUnitAssignments] = useState([]); // [{ unitId, memberId }]
+  const [openUnit, setOpenUnit] = useState(null); // which unitId's dropdown is open (kept but unused now)
+
+  const [assignModal, setAssignModal] = useState({ open: false, unitId: null });
 
   const selectedGroup = groups.find(g => g.id === formData.groupId);
   const allMembers = selectedGroup ? selectedGroup.members : [];
@@ -63,6 +68,9 @@ const ExpenseForm = ({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // -------------------------
+  // Validation + Submit
+  // -------------------------
   const validateForm = () => {
     if (!formData.description.trim()) return 'Please enter a description';
     if (!formData.amount || isNaN(parseFloat(formData.amount)) || parseFloat(formData.amount) <= 0) {
@@ -79,7 +87,6 @@ const ExpenseForm = ({
       Alert.alert('Error', error);
       return;
     }
-
     setLoading(true);
     try {
       await onSubmit({
@@ -88,16 +95,20 @@ const ExpenseForm = ({
         paidBy: currentUser.id,
         date: new Date().toISOString()
       });
-      
-      // Reset form
+
       setFormData({
         description: '',
         amount: '',
         groupId: '',
         category: 'other',
         splitType: 'equal',
-        participants: []
+        participants: [],
+        items: [],
+        subtotal: 0,
+        service_charge: 0
       });
+      setUnitAssignments([]);
+      setOpenUnit(null);
       setCurrentStep(1);
       onClose();
     } catch (error) {
@@ -107,6 +118,9 @@ const ExpenseForm = ({
     }
   };
 
+  // -------------------------
+  // Group + Participants
+  // -------------------------
   const handleGroupSelect = (groupId) => {
     updateFormData('groupId', groupId);
     const group = groups.find(g => g.id === groupId);
@@ -115,44 +129,130 @@ const ExpenseForm = ({
     }
   };
 
-  const toggleParticipant = (userId) => {
-    const currentParticipants = formData.participants;
-    const isSelected = currentParticipants.includes(userId);
-    
-    if (isSelected) {
-      updateFormData('participants', currentParticipants.filter(id => id !== userId));
-    } else {
-      updateFormData('participants', [...currentParticipants, userId]);
-    }
-  };
-
+  // -------------------------
+  // Receipt Scanner → populate fields
+  // -------------------------
   const handleReceiptScanned = (receiptData) => {
     if (receiptData) {
-      updateFormData('description', receiptData.merchant || receiptData.description || '');
-      updateFormData('amount', receiptData.total?.toString() || '');
-      
-      // Auto-categorize based on merchant name
-      const merchant = (receiptData.merchant || '').toLowerCase();
+      const merchant = receiptData.merchant || receiptData.description || '';
+      const totalStr = receiptData.total?.toString() || '';
+      const itemsIn = Array.isArray(receiptData.items) ? receiptData.items : [];
+
+      const normItems = itemsIn.map(it => ({
+        name: (it.name || it.description || '').toString(),
+        price: parseFloat(it.price ?? it.amount ?? 0) || 0, // line total
+        qty: parseInt(it.qty ?? 1, 10) || 1,
+      }));
+
+      const subtotal = normItems.reduce((s, it) => s + it.price, 0);
+      const total = parseFloat(totalStr) || 0;
+      const service_charge = Math.max(0, total - subtotal);
+
+      //test participants for now
+      let participants = formData.participants;
+      if (!formData.groupId || participants.length === 0) {
+        participants = ['Harry', 'Ron', 'Hermione'];
+      }
+
+      // build flat assignment units
+      const flatUnits = [];
+      normItems.forEach((it, idx) => {
+        const qty = Math.max(1, it.qty);
+        const unitPrice = qty > 0 ? (it.price / qty) : it.price;
+        for (let u = 0; u < qty; u++) {
+          flatUnits.push({ unitId: `${idx}-${u}`, name: it.name, unitPrice });
+        }
+      });
+
+      setUnitAssignments(flatUnits.map(u => ({ unitId: u.unitId, memberId: null })));
+
+      // auto-categorize
+      const merchantLower = merchant.toLowerCase();
       let category = 'other';
-      if (merchant.includes('restaurant') || merchant.includes('cafe') || merchant.includes('food')) {
+      if (merchantLower.includes('restaurant') || merchantLower.includes('cafe') || merchantLower.includes('food')) {
         category = 'food';
-      } else if (merchant.includes('gas') || merchant.includes('fuel')) {
+      } else if (merchantLower.includes('gas') || merchantLower.includes('fuel')) {
         category = 'transportation';
-      } else if (merchant.includes('grocery') || merchant.includes('market')) {
+      } else if (merchantLower.includes('grocery') || merchantLower.includes('market')) {
         category = 'groceries';
       }
-      updateFormData('category', category);
+
+      setFormData(prev => ({
+        ...prev,
+        description: merchant,
+        amount: total ? total.toFixed(2) : '',
+        category,
+        items: normItems,
+        subtotal,
+        service_charge,
+        participants
+      }));
     }
     setShowReceiptScanner(false);
   };
 
+  // -------------------------
+  // Split logic (equal / by item)
+  // -------------------------
+  const nMoney = (v) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : 0);
+  const nInt = (v, d = 1) => (Number.isFinite(parseInt(v, 10)) ? parseInt(v, 10) : d);
+
+  const memberList = useMemo(() => {
+      // Directly map participants from formData
+      return (formData.participants || []).map(p =>
+        typeof p === 'string' ? { id: p, name: p } : p
+      );
+  }, [formData.participants]);
+
+  const flatUnits = useMemo(() => {
+    const arr = [];
+    formData.items.forEach((it, idx) => {
+      const qty = nInt(it.qty, 1);
+      const lineTotal = nMoney(it.price);
+      const unitPrice = qty > 0 ? lineTotal / qty : lineTotal;
+      for (let u = 0; u < qty; u++) {
+        arr.push({ unitId: `${idx}-${u}`, name: it.name, unitPrice });
+      }
+    });
+    return arr;
+  }, [formData.items]);
+
+  const totalNum = nMoney(formData.amount);
+  const subtotalNum = formData.subtotal || formData.items.reduce((s, it) => s + nMoney(it.price), 0);
+  const groupSize = Math.max(1, memberList.length);
+
+  // total - subtotal (includes tax & all fees)
+  const serviceChargeAmount = Math.max(0, totalNum - subtotalNum);
+  const baseFeePerPerson = serviceChargeAmount / groupSize;
+
+  const owedByPerson = useMemo(() => {
+    const map = new Map(memberList.map(m => [m.id, 0]));
+    memberList.forEach(m => map.set(m.id, map.get(m.id) + baseFeePerPerson));
+    unitAssignments.forEach(assign => {
+      const unit = flatUnits.find(u => u.unitId === assign.unitId);
+      if (unit && assign.memberId && map.has(assign.memberId)) {
+       map.set(assign.memberId, map.get(assign.memberId) + unit.unitPrice);
+      } 
+    });
+    return map;
+  }, [memberList, baseFeePerPerson, unitAssignments, flatUnits]);
+
+  const getAssignedName = (unitId) => {
+    const a = unitAssignments.find(x => x.unitId === unitId);
+    const m = a ? memberList.find(mm => mm.id === a.memberId) : null;
+    return m?.name || 'Assign to';
+  };
+
+  // -------------------------
+  // Render helpers
+  // -------------------------
   const CategoryItem = ({ category }) => {
     const isSelected = formData.category === category.id;
     return (
       <TouchableOpacity
         style={[
           styles.categoryItem,
-          { 
+          {
             backgroundColor: isSelected ? category.color : theme.colors.surface,
             borderColor: isSelected ? category.color : theme.colors.border
           }
@@ -163,11 +263,7 @@ const ExpenseForm = ({
           styles.categoryIcon,
           { backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : category.color }
         ]}>
-          <Ionicons 
-            name={category.icon} 
-            size={24} 
-            color="white" 
-          />
+          <Ionicons name={category.icon} size={24} color="white" />
         </View>
         <Text style={[
           styles.categoryName,
@@ -185,7 +281,7 @@ const ExpenseForm = ({
       <TouchableOpacity
         style={[
           styles.groupItem,
-          { 
+          {
             backgroundColor: isSelected ? theme.colors.primary : theme.colors.surface,
             borderColor: isSelected ? theme.colors.primary : theme.colors.border
           }
@@ -227,7 +323,7 @@ const ExpenseForm = ({
         <View key={step} style={styles.stepContainer}>
           <View style={[
             styles.stepCircle,
-            { 
+            {
               backgroundColor: currentStep >= step ? theme.colors.primary : theme.colors.surface,
               borderColor: currentStep >= step ? theme.colors.primary : theme.colors.border
             }
@@ -263,15 +359,15 @@ const ExpenseForm = ({
               style={[styles.scanButton, { backgroundColor: theme.colors.accent }]}
               onPress={() => setShowReceiptScanner(true)}
             >
-              <Text style={styles.scanButtonText}>S  Scan Receipt</Text>
+              <Text style={styles.scanButtonText}>Scan Receipt</Text>
             </TouchableOpacity>
-            
+
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
                 Description
               </Text>
               <TextInput
-                style={[styles.input, { 
+                style={[styles.input, {
                   backgroundColor: theme.colors.surface,
                   borderColor: theme.colors.border,
                   color: theme.colors.text
@@ -288,7 +384,7 @@ const ExpenseForm = ({
                 Amount ($)
               </Text>
               <TextInput
-                style={[styles.input, { 
+                style={[styles.input, {
                   backgroundColor: theme.colors.surface,
                   borderColor: theme.colors.border,
                   color: theme.colors.text
@@ -320,7 +416,7 @@ const ExpenseForm = ({
             <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
               Select Group
             </Text>
-            
+
             <ScrollView style={styles.groupList}>
               {groups.map(group => (
                 <GroupItem key={group.id} group={group} />
@@ -335,30 +431,143 @@ const ExpenseForm = ({
             <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
               Split Details
             </Text>
-            
+
             <View style={[styles.summaryCard, { backgroundColor: theme.colors.card }]}>
               <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>
                 Summary
               </Text>
               <Text style={[styles.summaryAmount, { color: theme.colors.primary }]}>
-                ${formData.amount}
+                ${formData.amount || '0.00'}
+              </Text>
+              <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
+                Subtotal: ${subtotalNum.toFixed(2)}
+              </Text>
+              <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
+                Service Charge (including tax): ${serviceChargeAmount.toFixed(2)}
               </Text>
               <Text style={[styles.summaryDescription, { color: theme.colors.textSecondary }]}>
                 {formData.description}
               </Text>
               <Text style={[styles.summaryGroup, { color: theme.colors.textSecondary }]}>
-                {selectedGroup?.name} • {formData.participants.length} people
+                {selectedGroup?.name || 'No group'} • {memberList.length} people
               </Text>
             </View>
 
-            <Text style={[styles.label, { color: theme.colors.textSecondary, marginTop: 20 }]}>
-              Each person pays: ${(parseFloat(formData.amount || 0) / formData.participants.length).toFixed(2)}
-            </Text>
+            {/* Split Mode Toggle */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <TouchableOpacity
+                onPress={() => updateFormData('splitType', 'equal')}
+                style={[
+                  styles.splitToggle,
+                  {
+                    backgroundColor: formData.splitType === 'equal' ? theme.colors.primary : theme.colors.surface,
+                    borderColor: theme.colors.primary
+                  }
+                ]}>
+                <Text style={{ color: formData.splitType === 'equal' ? 'white' : theme.colors.primary, fontWeight: '700' }}>
+                  Split Evenly
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => updateFormData('splitType', 'byItem')}
+                style={[
+                  styles.splitToggle,
+                  {
+                    backgroundColor: formData.splitType === 'byItem' ? theme.colors.primary : theme.colors.surface,
+                    borderColor: theme.colors.primary
+                  }
+                ]}>
+                <Text style={{ color: formData.splitType === 'byItem' ? 'white' : theme.colors.primary, fontWeight: '700' }}>
+                  Split by Item
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {formData.splitType === 'equal' ? (
+              // -------------------------
+              // Split Evenly
+              // -------------------------
+              <View style={{ marginTop: 16 }}>
+                {memberList.map(m => (
+                  <View key={m.id} style={styles.oweRow}>
+                    <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}</Text>
+                    <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
+                      ${(totalNum / Math.max(1, memberList.length)).toFixed(2)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              // -------------------------
+              // Split by Item
+              // -------------------------
+              <View style={{ marginTop: 16 }}>
+                <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>
+                  Assign each item to a person: 
+                </Text>
+
+                {flatUnits.length === 0 ? (
+                  <Text style={{ color: theme.colors.textSecondary }}>No items found on this receipt.</Text>
+                ) : (
+                  flatUnits.map(u => {
+                    const a = unitAssignments.find(x => x.unitId === u.unitId);
+                    const selectedId = a?.memberId || (memberList[0] && memberList[0].id);
+                    return (
+                      <View key={u.unitId} style={styles.unitRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: theme.colors.text }}>{u.name}</Text>
+                          <Text style={{ color: theme.colors.textSecondary }}>${u.unitPrice.toFixed(2)}</Text>
+                        </View>
+
+                        <TouchableOpacity
+                          onPress={() => setAssignModal({ open: true, unitId: u.unitId })}
+                          style={{
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: theme.colors.primary,
+                            backgroundColor: theme.colors.surface,
+                            minWidth: 140,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>
+                            {getAssignedName(u.unitId)}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })
+                )}
+
+                {/* per-person totals */}
+                <View style={[styles.summaryCard, { backgroundColor: theme.colors.card, marginTop: 16 }]}>
+                  <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>Who owes what</Text>
+                  <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
+                    Base fee per person (fees + tax): ${baseFeePerPerson.toFixed(2)}
+                  </Text>
+                  {memberList.map(m => (
+                    <View key={m.id} style={styles.oweRow}>
+                      <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}: </Text>
+                      <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
+                        ${Math.max(0, owedByPerson.get(m.id)).toFixed(2)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
         );
     }
   };
 
+  // -------------------------
+  // Render
+  // -------------------------
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -368,8 +577,8 @@ const ExpenseForm = ({
               <Text style={[styles.iconText, { color: theme.colors.text }]}>×</Text>
             </View>
           </TouchableOpacity>
-          
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
             Add Expense
           </Text>
 
@@ -394,7 +603,7 @@ const ExpenseForm = ({
                 </Text>
               </TouchableOpacity>
             )}
-            
+
             <TouchableOpacity
               style={[
                 styles.footerButton,
@@ -417,11 +626,87 @@ const ExpenseForm = ({
           onClose={() => setShowReceiptScanner(false)}
           onReceiptScanned={handleReceiptScanned}
         />
+
+        <AssignMemberModal
+          visible={assignModal.open}
+          onClose={() => setAssignModal({ open: false, unitId: null })}
+          memberList={memberList}
+          theme={theme}
+          onPick={(memberId) => {
+            const unitId = assignModal.unitId;
+            setUnitAssignments(prev =>
+              prev.map(x => x.unitId === unitId ? { ...x, memberId } : x)
+            );
+            setAssignModal({ open: false, unitId: null });
+          }}
+        />
       </SafeAreaView>
     </Modal>
   );
 };
 
+const AssignMemberModal = ({ visible, onClose, memberList, theme, onPick }) => {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      {/* backdrop */}
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={{
+          position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.4)'
+        }} />
+      </TouchableWithoutFeedback>
+
+      {/* dialog */}
+      <View style={{
+        position: 'absolute', left: 20, right: 20, top: '25%',
+        borderRadius: 16, overflow: 'hidden',
+        backgroundColor: theme.colors.card,
+        borderWidth: 1, borderColor: theme.colors.border,
+        shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+      }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: theme.colors.border }}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: theme.colors.text }}>Assign to</Text>
+        </View>
+
+        <ScrollView style={{ maxHeight: 320 }}>
+          {memberList.map(m => (
+            <TouchableOpacity
+              key={m.id}
+              onPress={() => onPick(m.id)}
+              style={{
+                paddingHorizontal: 16, paddingVertical: 14,
+                borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'
+              }}
+            >
+              <Text style={{ fontSize: 16, color: theme.colors.text }}>{m.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <View style={{ padding: 12 }}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={{
+              alignItems: 'center',
+              paddingVertical: 12,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface,
+            }}
+          >
+            <Text style={{ color: theme.colors.textSecondary, fontWeight: '700' }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// -------------------------
+// Styles
+// -------------------------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -435,152 +720,59 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderBottomWidth: 1,
   },
-  closeButton: {
-    width: 40,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
+  closeButton: { width: 40 },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 36, height: 36, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center',
   },
-  iconText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
+  iconText: { fontSize: 18, fontWeight: '700' },
+
   stepIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 20,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 20,
   },
-  stepContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  stepContainer: { flexDirection: 'row', alignItems: 'center' },
   stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
+    width: 32, height: 32, borderRadius: 16,
+    justifyContent: 'center', alignItems: 'center', borderWidth: 2,
   },
-  stepNumber: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  stepLine: {
-    width: 40,
-    height: 2,
-    marginHorizontal: 10,
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-  stepContent: {
-    flex: 1,
-  },
-  stepTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 25,
-    textAlign: 'center',
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  input: {
-    borderWidth: 2,
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    paddingVertical: 15,
-    fontSize: 16,
-  },
-  categoryScroll: {
-    flexDirection: 'row',
-  },
+  stepNumber: { fontSize: 14, fontWeight: '700' },
+  stepLine: { width: 40, height: 2, marginHorizontal: 10 },
+
+  content: { flex: 1, padding: 20 },
+  stepContent: { flex: 1 },
+  stepTitle: { fontSize: 24, fontWeight: '700', marginBottom: 25, textAlign: 'center' },
+
+  inputGroup: { marginBottom: 20 },
+  label: { fontSize: 16, fontWeight: '600', marginBottom: 10 },
+  input: { borderWidth: 2, borderRadius: 12, paddingHorizontal: 15, paddingVertical: 15, fontSize: 16 },
+
+  categoryScroll: { flexDirection: 'row' },
   categoryItem: {
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginRight: 12,
-    borderWidth: 2,
-    minWidth: 100,
+    alignItems: 'center', padding: 16, borderRadius: 12, marginRight: 12, borderWidth: 2, minWidth: 100,
   },
   categoryIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
+    width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 8,
   },
+  categoryName: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
 
-  categoryName: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  groupList: {
-    flex: 1,
-  },
+  groupList: { flex: 1 },
   groupItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
+    flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 2,
   },
   groupIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
+    width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 16,
   },
-  groupIconText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: 'white',
-  },
-  groupInfo: {
-    flex: 1,
-  },
-  groupName: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  groupMembers: {
-    fontSize: 14,
-  },
+  groupIconText: { fontSize: 18, fontWeight: '800', color: 'white' },
+  groupInfo: { flex: 1 },
+  groupName: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  groupMembers: { fontSize: 14 },
   selectedIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  selectedIndicatorText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '700',
-  },
+  selectedIndicatorText: { color: 'white', fontSize: 14, fontWeight: '700' },
+
   summaryCard: {
     backgroundColor: 'white',
     borderRadius: 16,
@@ -589,72 +781,80 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.05)',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 10,
   },
-  summaryTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+  summaryTitle: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  summaryAmount: { fontSize: 32, fontWeight: '800', marginBottom: 8 },
+  summaryDescription: { fontSize: 16, marginBottom: 4 },
+  summaryGroup: { fontSize: 14 },
+
+  footer: { borderTopWidth: 1, padding: 20 },
+  footerButtons: { flexDirection: 'row', gap: 12 },
+  footerButton: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  footerButtonText: { fontSize: 16, fontWeight: '700' },
+  primaryButton: { flex: 2 },
+  primaryButtonText: { color: 'white', fontSize: 16, fontWeight: '700' },
+  disabledButton: { opacity: 0.6 },
+
+  scanButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    padding: 16, borderRadius: 12, marginBottom: 20,
   },
-  summaryAmount: {
-    fontSize: 32,
-    fontWeight: '800',
-    marginBottom: 8,
+  scanButtonText: { color: 'white', fontSize: 16, fontWeight: '700' },
+
+  splitToggle: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 2,
   },
-  summaryDescription: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  summaryGroup: {
-    fontSize: 14,
-  },
-  footer: {
-    borderTopWidth: 1,
-    padding: 20,
-  },
-  footerButtons: {
+  unitRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
     gap: 12,
   },
-  footerButton: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
+  oweRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
   },
-  footerButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  primaryButton: {
-    flex: 2,
-  },
-  primaryButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  scanButton: {
+  oweName: { fontSize: 16, fontWeight: '600' },
+  oweAmount: { fontSize: 16, fontWeight: '700' },
+
+  // dropdown (kept for style references; not used by new popup)
+  dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 2,
   },
-  scanButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '700',
+  dropdownMenu: {
+    position: 'absolute',
+    top: 44,
+    right: 0,
+    left: 0,
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+    zIndex: 10,
+  },
+  dropdownItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
   },
 });
 

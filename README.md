@@ -58,6 +58,9 @@ pip install flask flask-cors pillow pytesseract werkzeug    #install dependencie
 python main.py      #run the flask server
 ```
 
+-have to change host IP address in ReceiptScanner.js and have to set the correct tesseract path in python_ocr/main.py
+
+
 #### 4. Connect Your Device
 - Scan the QR code with Expo Go app
 

@@ -59,8 +59,12 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
       if (result.user && Array.isArray(result.user.friends)) {
         setFriends(result.user.friends); // update UI
         alert(`${friendEmail} has been added to your friends list!`);
+        setFriendEmail('');
+        setShowAddFriend(false);
       } else {
         alert('Friend added, but could not fetch updated friends list.');
+        setFriendEmail(''); // Clear even if friends list couldn't be fetched
+        setShowAddFriend(false);
       }
     } else {
       // Show backend-provided error or fallback
@@ -71,6 +75,22 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
     alert('An unexpected error occurred. Please try again.');
   }
 };
+const handleRemoveSelectedFriend = async (friend) => {
+  try {
+    const res = await apiService.removeFriend(friend.id); // send the correct id
+    if (res.success) {
+      setFriends(res.friends || []);
+      Alert.alert('Removed', 'Friend removed successfully');
+      setShowFriendDetails(false);
+      setSelectedFriendForDetails(null);
+    } else {
+      Alert.alert('Error', res.message || 'Failed to remove friend');
+    }
+  } catch (err) {
+    Alert.alert('Error', err.message || 'Server error');
+  }
+};
+
 
   const { isAuthenticated } = useUser();
 
@@ -197,12 +217,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
                 )}
               </View>
             )}
-
-            <View style={[
-              styles.statusDot, 
-              { backgroundColor: (item.status === 'online') ? theme.colors.success : theme.colors.textSecondary }
-            ]} />
-
+            
           </View>
         </TouchableOpacity>
       </View>
@@ -210,36 +225,6 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
   };
 
   // Friend details modal handlers
-  const handleRemoveSelectedFriend = async (friend) => {
-    // Try removing by id first; if server reports not found or not-in-list, try by email
-    const tryRemove = async (identifier) => {
-      try {
-        const res = await apiService.removeFriend(identifier);
-        return res;
-      } catch (err) {
-        return { success: false, error: err.message };
-      }
-    };
-
-    let res = await tryRemove(friend.id || friend._id);
-    if (!res || !res.success) {
-      const message = res?.message || res?.error || '';
-      // If not found / not in list, try fallback with email if available
-      if (friend.email && (message.includes('not found') || message.includes('not in your friends') || message.includes('not in your friends list') || message.includes('Friend not found'))) {
-        res = await tryRemove(friend.email);
-      }
-    }
-
-    if (res && res.success) {
-      setFriends(res.friends || []);
-      Alert.alert('Removed', 'Friend removed successfully');
-      setShowFriendDetails(false);
-      setSelectedFriendForDetails(null);
-    } else {
-      const message = res?.message || res?.error || 'Failed to remove friend';
-      Alert.alert('Error', message);
-    }
-  };
 
   const handleAccept = async (requestId) => {
     try {
@@ -344,7 +329,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
                   style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
                   onPress={handleAddFriend}
                 >
-                  <Text style={styles.addButtonText}>Send Request</Text>
+                  <Text style={styles.addButtonText}>Add Friend</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -519,6 +504,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
 
       {/*tab navigation*/}
       <View style={[styles.tabContainer, { backgroundColor: theme.colors.card }]}>
+        {/* Friends Tab */}
         <TouchableOpacity
           style={[
             styles.tab,
@@ -533,6 +519,8 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
             Friends ({friends.length})
           </Text>
         </TouchableOpacity>
+
+        {/* Groups Tab */}
         <TouchableOpacity
           style={[
             styles.tab,

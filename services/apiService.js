@@ -234,6 +234,29 @@ class ApiService {
     });
   }
 
+  // friend methods
+  // add friend method
+  async addFriend(friendEmail) {
+  return await this.makeRequest('/users/add-friend', { // bridge between frontend and backend
+    method: 'POST', 
+    body: { email: friendEmail }
+  });
+}
+ // get friends method
+  async getFriends() {
+    return await this.makeRequest('/users/friends', {
+      method: 'GET',
+    });
+  }
+
+  // Remove/unfriend a user (mutual removal)
+  async removeFriend(friendId) {
+    const encoded = encodeURIComponent(String(friendId));
+    return await this.makeRequest(`/users/friends/${encoded}`, {
+      method: 'DELETE'
+    });
+  }
+
   // Group methods
   async getGroups() {
     return await this.makeRequest('/groups');
@@ -362,27 +385,6 @@ class ApiService {
     });
   }
 
-  // add friend method
-  async addFriend(friendEmail) {
-  return await this.makeRequest('/users/add-friend', { // bridge between frontend and backend
-    method: 'POST', 
-    body: { email: friendEmail }
-  });
-}
- // get friends method
-  async getFriends() {
-    return await this.makeRequest('/users/friends', {
-      method: 'GET',
-    });
-  }
-
-  // Remove/unfriend a user (mutual removal)
-  async removeFriend(friendId) {
-    const encoded = encodeURIComponent(String(friendId));
-    return await this.makeRequest(`/users/friends/${encoded}`, {
-      method: 'DELETE'
-    });
-  }
 
   // Debug: return authenticated user and populated friends (dev only)
   async getDebugUser() {

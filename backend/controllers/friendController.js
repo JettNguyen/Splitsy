@@ -91,7 +91,7 @@ exports.debugUser = async (req, res) => {
 };
 
 
-// friend request functionality
+// friend request functionality: for future use
 
 // Send friend request
 exports.sendRequest = async (req, res, next) => {

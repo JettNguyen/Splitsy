@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,9 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
 import { useTheme } from '../context/ThemeContext';
 import ReceiptScanner from './ReceiptScanner';
+import apiService from '../services/apiService';
 
 const ExpenseCategories = [
   { id: 'food', name: 'Food & Dining', icon: 'restaurant-outline', color: '#EF4444' },
@@ -28,11 +28,10 @@ const ExpenseCategories = [
   { id: 'other', name: 'Other', icon: 'ellipse-outline', color: '#7C3AED' }
 ];
 
-const ExpenseForm = ({
-  visible,
+
+const ExpenseForm = ({visible,
   onClose,
   onSubmit,
-  groups,
   currentUser,
   initialData = {}
 }) => {
@@ -61,8 +60,52 @@ const ExpenseForm = ({
 
   const [assignModal, setAssignModal] = useState({ open: false, unitId: null });
 
+// FETCH FRIENDS FROM DB
+const [friends, setFriends] = useState([]);
+const [loadingFriends, setLoadingFriends] = useState(false);
+
+useEffect(() => {
+  const fetchFriends = async () => {
+    setLoadingFriends(true);
+    try {
+      const result = await apiService.getFriends();
+      if (result && result.success && Array.isArray(result.friends)) {
+        setFriends(result.friends);
+      }
+    } catch (err) {
+      console.error('Error fetching friends:', err);
+    } finally {
+      setLoadingFriends(false);
+    }
+  };
+  fetchFriends();
+}, []);
+
+// FETCH GROUPS FROM DB
+const [groups, setGroups] = useState([]);
+const [loadingGroups, setLoadingGroups] = useState(false);
+
+useEffect(() => {
+  const fetchGroups = async () => {
+  setLoadingGroups(true);
+  try {
+    const result = await apiService.getGroups();
+    if (Array.isArray(result)) {
+      setGroups(result);
+    }
+  } catch (err) {
+    console.error('Error fetching groups:', err);
+  } finally {
+    setLoadingGroups(false);
+  }
+};
+
+  fetchGroups();
+}, []);
+
   const selectedGroup = groups.find(g => g.id === formData.groupId);
   const allMembers = selectedGroup ? selectedGroup.members : [];
+
 
   const updateFormData = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -121,13 +164,42 @@ const ExpenseForm = ({
   // -------------------------
   // Group + Participants
   // -------------------------
-  const handleGroupSelect = (groupId) => {
-    updateFormData('groupId', groupId);
+const handleGroupSelect = (groupId) => {
+  const current = formData.groupId;
+  if (current === groupId) {
+    // If clicked the same group, unselect it
+    updateFormData('groupId', '');
+    updateFormData('participants', []);
+  } else {
     const group = groups.find(g => g.id === groupId);
+    updateFormData('groupId', groupId);
+
     if (group) {
-      updateFormData('participants', group.members);
+      // Extract unique user IDs
+      const uniqueUserIds = Array.from(
+        new Set(group.members.map(member => member.user.id))
+      );
+      updateFormData('participants', uniqueUserIds);
     }
-  };
+  }
+};
+
+
+  // handle individual friend selection
+const handleFriendSelect = (friendId) => {
+  setFormData(prev => {
+    let participantsById = prev.participants.includes(friendId)
+      ? prev.participants.filter(id => id !== friendId) // remove
+      : [...prev.participants, friendId]; // add
+
+    // Ensure current user is always included
+    if (!participantsById.includes(currentUser.id)) {
+      participantsById = [currentUser.id, ...participantsById];
+    }
+
+    return { ...prev, participants: participantsById };
+  });
+};
 
   // -------------------------
   // Receipt Scanner → populate fields
@@ -197,12 +269,25 @@ const ExpenseForm = ({
   const nMoney = (v) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : 0);
   const nInt = (v, d = 1) => (Number.isFinite(parseInt(v, 10)) ? parseInt(v, 10) : d);
 
-  const memberList = useMemo(() => {
-      // Directly map participants from formData
-      return (formData.participants || []).map(p =>
-        typeof p === 'string' ? { id: p, name: p } : p
-      );
-  }, [formData.participants]);
+const memberList = useMemo(() => {
+  return (formData.participants || []).map(userId => {
+    // First check friends
+    const friend = friends.find(f => f.id === userId);
+    if (friend) return { id: friend.id, name: friend.name };
+
+    // Then check selected group members
+    const groupMember = groups
+      .flatMap(g => g.members)
+      .find(m => m.user.id === userId);
+
+    if (groupMember) return { id: userId, name: groupMember.user.name };
+
+    // fallback
+    return { id: userId, name: 'Unknown' };
+  });
+}, [formData.participants, friends, groups]);
+
+
 
   const flatUnits = useMemo(() => {
     const arr = [];
@@ -275,7 +360,7 @@ const ExpenseForm = ({
     );
   };
 
-  const GroupItem = ({ group }) => {
+const GroupItem = ({ group }) => {
     const isSelected = formData.groupId === group.id;
     return (
       <TouchableOpacity
@@ -316,6 +401,42 @@ const ExpenseForm = ({
       </TouchableOpacity>
     );
   };
+const FriendItem = ({ friend }) => {
+  const isSelected = formData.participants.includes(friend.id);
+  return (
+    <TouchableOpacity
+      style={[
+        styles.groupItem,
+        {
+          backgroundColor: isSelected ? theme.colors.primary : theme.colors.surface,
+          borderColor: isSelected ? theme.colors.primary : theme.colors.border,
+        }
+      ]}
+      onPress={() => handleFriendSelect(friend.id)}
+    >
+      <View style={[
+        styles.groupIcon,
+        { backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : theme.colors.primary }
+      ]}>
+        <Text style={styles.groupIconText}>{friend.name[0]}</Text>
+      </View>
+      <View style={styles.groupInfo}>
+        <Text style={[styles.groupName, { color: isSelected ? 'white' : theme.colors.text }]}>
+          {friend.name}
+        </Text>
+        <Text style={[styles.groupMembers, { color: isSelected ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary }]}>
+          Friend
+        </Text>
+      </View>
+      {isSelected && (
+        <View style={styles.selectedIndicator}>
+          <Text style={styles.selectedIndicatorText}>✓</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
 
   const StepIndicator = () => (
     <View style={styles.stepIndicator}>
@@ -411,19 +532,32 @@ const ExpenseForm = ({
         );
 
       case 2:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
-              Select Group
-            </Text>
+      return (
+        <View style={styles.stepContent}>
+          <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
+            Select Members
+          </Text>
 
-            <ScrollView style={styles.groupList}>
+          <ScrollView style={styles.groupList} showsVerticalScrollIndicator={false}>
+
+            {/* --- Groups Section --- */}
+            <View style={[styles.sectionContainer, { backgroundColor: theme.colors.card }]}>
+              <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Groups</Text>
               {groups.map(group => (
                 <GroupItem key={group.id} group={group} />
               ))}
-            </ScrollView>
-          </View>
-        );
+            </View>
+
+            {/* --- Friends Section --- */}
+            <View style={[styles.sectionContainer, { backgroundColor: theme.colors.card, marginTop: 16 }]}>
+              <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Friends</Text>
+              {friends.map(friend => (
+                <FriendItem key={friend.id} friend={friend} />
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+  );
 
       case 3:
         return (
@@ -856,6 +990,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.06)',
   },
+  sectionContainer: {
+  borderRadius: 16,
+  padding: 12,
+  marginBottom: 12,
+  borderWidth: 1,
+  borderColor: 'rgba(0,0,0,0.05)',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.05,
+  shadowRadius: 8,
+  elevation: 3,
+},
+sectionHeader: {
+  fontSize: 16,
+  fontWeight: '700',
+  marginBottom: 8,
+  textAlign: 'center',
+},
 });
 
 export default ExpenseForm;

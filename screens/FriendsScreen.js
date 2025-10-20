@@ -97,7 +97,7 @@ const handleRemoveSelectedFriend = async (friend) => {
   React.useEffect(() => {
     const fetchFriends = async () => {
       try {
-        const result = await apiService.getFriends(); // make sure you have this API method
+        const result = await apiService.getFriends();
         if (result && result.success && Array.isArray(result.friends)) {
           setFriends(result.friends);
         }

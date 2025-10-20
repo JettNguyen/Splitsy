@@ -22,7 +22,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   const [capturedImage, setCapturedImage] = useState(null);
   const [showEditView, setShowEditView] = useState(false);
   const [extractedData, setExtractedData] = useState({
-    merchant: '', date: '', subtotal: '', tax: '', service_charge: '', total: '', items: []
+    merchant: '', date: '', subtotal: '', total: '', items: []
   });
   const [savedInfo, setSavedInfo] = useState({ saved_json_path: '', saved_image_path: '' });
 
@@ -32,7 +32,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       setIsProcessing(false);
       setCapturedImage(null);
       setShowEditView(false);
-      setExtractedData({ merchant: '', date: '', subtotal: '', tax: '', service_charge: '', total: '', items: [] });
+      setExtractedData({ merchant: '', date: '', subtotal: '', total: '', items: [] });
       setSavedInfo({ saved_json_path: '', saved_image_path: '' });
     }
   }, [visible]);
@@ -75,8 +75,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
         merchant: data.merchant || 'unknown merchant',
         date: data.date || new Date().toLocaleDateString(),
         subtotal: data.subtotal || '0.00',
-        tax: data.tax || '0.00',
-        service_charge: data.service_charge || '0.00',
         total: data.total || '0.00',
         items: Array.isArray(data.items)
           ? data.items.map(i => ({ name: i.name || '', price: i.price?.toString() || '', qty: i.qty || 1 }))
@@ -179,9 +177,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       subtotal += q * p;
     }
 
-    const tax = !isNaN(parseFloat(prev.tax)) ? parseFloat(prev.tax) : 0;
-    const newTotal = (subtotal + tax).toFixed(2);
-
     return {
       ...prev,
       items: updatedItems,
@@ -194,7 +189,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   // confirm and pass back
   const handleConfirm = () => {
     if (!extractedData.merchant.trim()) return Alert.alert('missing', 'please enter a merchant');
-    if (!extractedData.tax.trim()) return Alert.alert('missing', 'please enter a tax');
     if (!extractedData.total.trim()) return Alert.alert('missing', 'please enter a total');
 
     onReceiptScanned({ ...extractedData, _saved: savedInfo });
@@ -320,18 +314,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
                   style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
                   value={extractedData.subtotal}
                   onChangeText={(t) => setExtractedData(p => ({ ...p, subtotal: t }))}
-                  placeholder="$0.00"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Tax</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
-                  value={extractedData.tax}
-                  onChangeText={(t) => setExtractedData(p => ({ ...p, tax: t }))}
                   placeholder="$0.00"
                   placeholderTextColor={theme.colors.textSecondary}
                   keyboardType="decimal-pad"

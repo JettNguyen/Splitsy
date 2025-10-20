@@ -8,12 +8,14 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
+import Constants from 'expo-constants';
+const { IP_ADDRESS } = Constants.expoConfig.extra;
 
 // set this to your flask url
 // ios sim:      http://127.0.0.1:5000/ocr
 // android emu:  http://10.0.2.2:5000/ocr
 // real device:  http://<your-computer-ip>:5000/ocr
-const BACKEND_URL = 'http://192.168.1.242:5000/ocr';
+const BACKEND_URL = `http://${IP_ADDRESS}:5000/ocr`;
 
 const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   const { theme } = useTheme();

@@ -111,7 +111,13 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
       return;
     }
 
-    if (group.members.includes(existingUser.id)) {
+    // robustly check membership by id (members may be stored as objects or ids)
+    const alreadyMember = group.members.some(m => {
+      const memberId = m && (m.user?._id || m.user?.id || m._id || m.id || m);
+      return String(memberId) === String(existingUser.id || existingUser._id);
+    });
+
+    if (alreadyMember) {
       Alert.alert('Error', 'User is already a member of this group');
       return;
     }
@@ -122,6 +128,11 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
       setNewMemberEmail('');
       setShowAddMember(false);
       Alert.alert('Success', 'Member added successfully');
+      // Refresh transactions and balances
+      const txResp = await loadTransactions(groupId);
+      setGroupTransactions(txResp || []);
+      const balances = await getGroupBalances(groupId);
+      setGroupBalances(balances || []);
     } catch (error) {
       Alert.alert('Error', 'Failed to add member');
     }
@@ -316,9 +327,10 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
             </View>
             
             <View style={styles.membersList}>
-              {group.members.map((memberId) => (
-                <MemberItem key={memberId} memberId={memberId} />
-              ))}
+              {group.members.map((member) => {
+                const memberId = member && (member.user?._id || member.user?.id || member._id || member.id || member);
+                return <MemberItem key={String(memberId)} memberId={memberId} />;
+              })}
             </View>
           </View>
 

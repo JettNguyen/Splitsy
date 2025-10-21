@@ -293,11 +293,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
                 </Text>
               </View>
             </View>
-            <View style={styles.membersList}>
-              <Text style={[styles.membersText, { color: theme.colors.textSecondary }]}>
-                {(item.members && item.members.length > 0) ? item.members.join(', ') : 'No members'}
-              </Text>
-            </View>
+            
           </TouchableOpacity>
           
           {/*delete button*/}

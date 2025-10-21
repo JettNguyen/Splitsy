@@ -321,7 +321,7 @@ function useModalState(initialState = false) {
 function MainApp() {
   const { theme, isLoading: themeLoading } = useTheme();
   const { currentUser, isAuthenticated, userLoading } = useUser();
-  const { groups, getUserGroups, getUserTransactions, calculateUserBalance, dataLoading, createTransaction } = useData();
+  const { groups, getUserGroups, getUserTransactions, calculateUserBalance, dataLoading, createTransaction, userBalances, fetchUserBalances } = useData();
   
   const [activeTab, setActiveTab] = useState('home');
   const [showAddExpense, showAddExpenseModal, hideAddExpenseModal] = useModalState();
@@ -339,7 +339,23 @@ function MainApp() {
 
   const userGroups = getUserGroups() || [];
   const userTransactions = getUserTransactions() || [];
-  const balance = calculateUserBalance() || { owed: 0, owes: 0, net: 0 };
+  // Prefer backend-computed balances when available (userBalances comes from /api/transactions/user/balances)
+  let balance;
+  if (userBalances && userBalances.summary) {
+    balance = {
+      owed: userBalances.summary.totalOwedToMe || 0,
+      owes: userBalances.summary.totalIOwe || 0,
+      net: userBalances.summary.netBalance || 0
+    };
+  } else {
+    const rawBalance = calculateUserBalance() || { owed: 0, owes: 0, net: 0 };
+    balance = {
+      owed: rawBalance.owed || 0,
+      owes: rawBalance.owes || 0,
+      net: rawBalance.net || 0
+    };
+  }
+
 
   // Called when the Add Expense form is submitted.
   // Transforms UI form data into the backend transaction payload and submits it.
@@ -372,9 +388,15 @@ function MainApp() {
         payload.group = expenseData.groupId;
       }
 
-  await createTransaction(payload);
-  await getUserTransactions();
-  await calculateUserBalance();
+      await createTransaction(payload);
+      await getUserTransactions();
+      // Refresh server-side computed balances and update the context
+      await fetchUserBalances();
+      const txResp = await loadTransactions(groupId);
+      setGroupTransactions(txResp || []);
+      const balances = await getGroupBalances(groupId);
+      setGroupBalances(balances || []);
+
   hideAddExpenseModal();
       Alert.alert('Success', 'Expense added successfully');
     } catch (error) {
@@ -409,7 +431,7 @@ function MainApp() {
           <ActivityScreen 
           userTransactions={userTransactions} 
           userGroups={userGroups} 
-          userBalances={userBalances}
+          userBalances={balance}
         />
         );
       case 'profile':

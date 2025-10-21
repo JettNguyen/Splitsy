@@ -8,6 +8,13 @@ export const API_BASE_URL = __DEV__
   ? `http://${IP_ADDRESS}:${PORT}/api`
   : PROD_API_URL;
 
+// Debug: print which IP the bundle is using at runtime
+try {
+  console.log('ApiService: DEV IP_ADDRESS=', IP_ADDRESS, 'PORT=', PORT, 'API_BASE_URL=', API_BASE_URL);
+} catch (e) {
+  // ignore
+}
+
 class ApiService {
   constructor() {
     this.baseURL = API_BASE_URL;

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
 
 //services and context
@@ -474,37 +474,38 @@ const fetchUserBalances = async () => {
     }
   };
 
-  const value = {
-    groups,
-    transactions,
-    isLoading,
-    error,
-
-    createGroup,
-    updateGroup,
-    deleteGroup,
-    addGroupMember,
-    removeGroupMember,
-    leaveGroup,
-    getUserGroups,
-    getGroupBalances,
-
-    createTransaction,
-    updateTransaction,
-    deleteTransaction,
-    markTransactionPaid,
-    getUserTransactions,
-    loadTransactions,
-    calculateUserBalance,
-    fetchUserBalances,
-    userBalances,
-    userGroups: getUserGroups(),
-    userTransactions: getUserTransactions(),
-
-    clearData,
-    retry,
-    refresh: initializeData
-  };
+  const value = useMemo(() => ({
+  groups,
+  transactions,
+  isLoading,
+  error,
+  createGroup,
+  updateGroup,
+  deleteGroup,
+  addGroupMember,
+  removeGroupMember,
+  leaveGroup,
+  getUserGroups,
+  getGroupBalances,
+  createTransaction,
+  updateTransaction,
+  deleteTransaction,
+  markTransactionPaid,
+  getUserTransactions,
+  loadTransactions,
+  calculateUserBalance,
+  fetchUserBalances,
+  userBalances,
+  clearData,
+  retry,
+  refresh: initializeData,
+}), [
+  groups,
+  transactions,
+  isLoading,
+  error,
+  userBalances, 
+]);
 
   return (
     <DataContext.Provider value={value}>

@@ -35,6 +35,11 @@ router.post('/', protect, async (req, res) => {
     payload.createdBy = req.user._id;
 
     const tx = await Transaction.create(payload);
+    // Populate payer and participants.user so frontend consumers receive the expected shape
+    const populatedTx = await Transaction.findById(tx._id)
+      .populate('payer', 'id name email')
+      .populate('participants.user', 'id name email')
+      .lean();
 
     // Update group's totals asynchronously (best-effort)
     try {
@@ -46,7 +51,7 @@ router.post('/', protect, async (req, res) => {
         console.warn('Failed to update group totals after creating transaction', err.message);
       }
 
-    return res.status(201).json({ success: true, data: tx });
+  return res.status(201).json({ success: true, data: populatedTx });
   } catch (error) {
     console.error('Error creating transaction:', error);
     return res.status(400).json({ success: false, message: error.message || 'Invalid transaction data' });

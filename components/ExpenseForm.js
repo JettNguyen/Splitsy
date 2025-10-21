@@ -288,7 +288,6 @@ const memberList = useMemo(() => {
 }, [formData.participants, friends, groups]);
 
 
-
   const flatUnits = useMemo(() => {
     const arr = [];
     formData.items.forEach((it, idx) => {

@@ -63,12 +63,17 @@ const getGroup = async (req, res) => {
     }
 
     // Get recent transactions
-    const recentTransactions = await Transaction.find({ group: group._id })
-      .populate('payer', 'name email')
-      .populate('participants.user', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(10);
-
+    const recentTransactions = await Transaction.find({
+      $or: [
+        { group: group._id },     // transactions in this group
+        { group: { $exists: false } }, // transactions without a group field
+        { group: null }           // transactions with group explicitly null
+      ]
+    })
+    .populate('payer', 'name email')
+    .populate('participants.user', 'name email')
+    .sort({ createdAt: -1 })
+    .limit(10);
     // Get group statistics
     const stats = await Transaction.aggregate([
       { $match: { group: group._id, status: { $ne: 'cancelled' } } },

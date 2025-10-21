@@ -18,7 +18,9 @@ import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
 const ActivityScreen = () => {
   const { theme } = useTheme();
   
-  const { userTransactions, userGroups, userBalances, fetchUserBalances } = useData();
+  const {userBalances, fetchUserBalances, getUserGroups, getUserTransactions } = useData();
+  const userGroups = getUserGroups();
+  const userTransactions = getUserTransactions();
 
   const { currentUser } = useUser();
   const [filter, setFilter] = useState('all');
@@ -32,6 +34,7 @@ useEffect(() => {
 
 
   const getFilteredActivity = () => {
+    console.log('User Transactions:', userTransactions);
     let activities = [...(userTransactions || [])];
     
     activities.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));

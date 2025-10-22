@@ -4,6 +4,53 @@ const { protect } = require('../middleware/auth');
 const Transaction = require('../models/Transaction');
 const Group = require('../models/Group');
 
+// @route   GET /api/transactions/user/balances
+// @desc    Compute user's balances across groups and a summary
+// @access  Private
+router.get('/user/balances', protect, async (req, res) => {
+  console.log('GET /user/balances called for user:', req.user?._id);
+  try {
+    const userId = req.user._id;
+
+    // Find groups where user is a member
+    const groups = await Group.find({ 'members.user': userId }).select('id name').lean();
+    console.log('User groups for balance computation:', groups.map(g => g.name));
+
+    const groupBalances = await Promise.all(groups.map(async (g) => {
+      const bal = await Transaction.getUserGroupBalance(userId, g._id || g.id);
+      return {
+        groupId: g._id || g.id,
+        groupName: g.name,
+        balance: bal.balance,
+        totalPaid: bal.totalPaid,
+        totalOwed: bal.totalOwed
+      };
+    }));
+
+    // Summarize across groups
+    let netBalance = 0;
+    let totalOwedToMe = 0;
+    let totalIOwe = 0;
+
+    for (const gb of groupBalances) {
+      netBalance += gb.balance;
+      if (gb.balance > 0) totalOwedToMe += gb.balance;
+      else totalIOwe += Math.abs(gb.balance);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        summary: { totalOwedToMe, totalIOwe, netBalance },
+        groupBalances
+      }
+    });
+  } catch (error) {
+    console.error('Error computing user balances:', error);
+    return res.status(500).json({ success: false, message: 'Server error computing balances' });
+  }
+});
+
 // @route   GET /api/transactions/user/:userId
 // @desc    List transactions for a user
 // @access  Private
@@ -152,51 +199,6 @@ router.post('/:id/settle', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/transactions/user/balances
-// @desc    Compute user's balances across groups and a summary
-// @access  Private
-router.get('/user/balances', protect, async (req, res) => {
-  console.log('GET /user/balances called for user:', req.user?._id);
-  try {
-    const userId = req.user._id;
 
-    // Find groups where user is a member
-    const groups = await Group.find({ 'members.user': userId }).select('id name').lean();
-    console.log('User groups for balance computation:', groups.map(g => g.name));
-
-    const groupBalances = await Promise.all(groups.map(async (g) => {
-      const bal = await Transaction.getUserGroupBalance(userId, g._id || g.id);
-      return {
-        groupId: g._id || g.id,
-        groupName: g.name,
-        balance: bal.balance,
-        totalPaid: bal.totalPaid,
-        totalOwed: bal.totalOwed
-      };
-    }));
-
-    // Summarize across groups
-    let netBalance = 0;
-    let totalOwedToMe = 0;
-    let totalIOwe = 0;
-
-    for (const gb of groupBalances) {
-      netBalance += gb.balance;
-      if (gb.balance > 0) totalOwedToMe += gb.balance;
-      else totalIOwe += Math.abs(gb.balance);
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        summary: { totalOwedToMe, totalIOwe, netBalance },
-        groupBalances
-      }
-    });
-  } catch (error) {
-    console.error('Error computing user balances:', error);
-    return res.status(500).json({ success: false, message: 'Server error computing balances' });
-  }
-});
 
 module.exports = router;

@@ -19,14 +19,13 @@ const PORT = process.env.PORT || 3000;
 // Connect to MongoDB
 const connectDB = async () => {
   try {
-    console.log('MongoDB URI:', process.env.MONGODB_URI);
-    console.log('Full URI with database:', process.env.MONGODB_URI + '/splitsy');
-    const conn = await mongoose.connect(process.env.MONGODB_URI + '/splitsy', {
+  // Connect to MongoDB (URI hidden in logs to avoid leaking credentials)
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-    console.log(`Database: ${conn.connection.db.databaseName}`);
+  console.log(`MongoDB connected to host: ${conn.connection.host}`);
+  console.log(`Using database: ${conn.connection.db.databaseName}`);
   } catch (error) {
     console.error('Database connection failed:', error);
     process.exit(1);
@@ -185,9 +184,9 @@ const startServer = async () => {
   await connectDB();
   
   app.listen(PORT, () => {
-    console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-    console.log(`📱 Health check: http://localhost:${PORT}/health`);
-    console.log(`📊 API Base URL: http://localhost:${PORT}/api`);
+    console.log(`Server running in ${process.env.NODE_ENV || 'development'} on port ${PORT}`);
+    console.log(`Health check available at http://localhost:${PORT}/health`);
+    console.log(`API base URL: http://localhost:${PORT}/api`);
   });
 };
 
@@ -206,7 +205,7 @@ process.on('uncaughtException', (err) => {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n👋 Graceful shutdown initiated...');
+  console.log('\nGraceful shutdown initiated...');
   try {
     await mongoose.connection.close();
     console.log('Database connection closed.');

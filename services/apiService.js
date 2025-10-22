@@ -8,12 +8,7 @@ export const API_BASE_URL = __DEV__
   ? `http://${IP_ADDRESS}:${PORT}/api`
   : PROD_API_URL;
 
-// Debug: print which IP the bundle is using at runtime
-try {
-  console.log('ApiService: DEV IP_ADDRESS=', IP_ADDRESS, 'PORT=', PORT, 'API_BASE_URL=', API_BASE_URL);
-} catch (e) {
-  // ignore
-}
+// Note: API_BASE_URL is configured from Expo constants in development.
 
 class ApiService {
   constructor() {
@@ -23,19 +18,13 @@ class ApiService {
 
   //initialize the service and load stored token
   async init() {
-    try {
+  try {
       // If token is already set in-memory (e.g. just after login), prefer that to avoid
       // a race where AsyncStorage hasn't been written yet.
-      if (this.token) {
-        console.log('ApiService.init: token already present in memory');
-        return;
-      }
+      if (this.token) return;
 
       const token = await AsyncStorage.getItem('authToken');
-      if (token) {
-        this.token = token;
-        console.log('ApiService.init: token loaded (present in storage)');
-      }
+      if (token) this.token = token;
     } catch (error) {
       console.error('Error loading token:', error);
     }
@@ -45,13 +34,8 @@ class ApiService {
   async setAuthToken(token) {
     this.token = token;
     try {
-      if (token) {
-        await AsyncStorage.setItem('authToken', token);
-        console.log('ApiService.setAuthToken: token set');
-      } else {
-        await AsyncStorage.removeItem('authToken');
-        console.log('ApiService.setAuthToken: token cleared');
-      }
+      if (token) await AsyncStorage.setItem('authToken', token);
+      else await AsyncStorage.removeItem('authToken');
     } catch (e) {
       console.error('ApiService.setAuthToken: storage error', e);
     }
@@ -74,12 +58,7 @@ class ApiService {
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     // Debug: show whether a token is present at call time (redacted)
-    try {
-      const tokenPreview = this.token ? `${this.token.slice(0, 6)}...` : null;
-      console.log('ApiService.makeRequest:', options.method || 'GET', url, 'hasAuth=', !!this.token, 'tokenPreview=', tokenPreview);
-    } catch (e) {
-      // swallow logging errors
-    }
+    // Intentionally avoid noisy debug logs here; errors are logged below when they occur.
     
     // Merge headers so callers can pass additional headers without removing Authorization
     const mergedHeaders = { ...this.getAuthHeaders(), ...(options.headers || {}) };
@@ -138,14 +117,16 @@ class ApiService {
       // Parsed response (JSON or text)
       return data;
     } catch (error) {
-      // Log some context to help debugging during development
+      // Log a concise message and include context only in development
       console.error(`API Error [${config.method} ${url}]:`, error.message);
-      console.error('Request details:', {
-        url,
-        baseURL: this.baseURL,
-        method: config.method,
-        hasAuth: !!this.token
-      });
+      if ((process.env.NODE_ENV || 'development') === 'development') {
+        console.debug && console.debug('Request debug:', {
+          url,
+          baseURL: this.baseURL,
+          method: config.method,
+          hasAuth: !!this.token
+        });
+      }
       
       if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
         throw new Error('Cannot connect to server. Please check your internet connection.');
@@ -241,6 +222,18 @@ class ApiService {
     });
   }
 
+  async getPaymentMethods() {
+    return await this.makeRequest('/auth/payment-methods', {
+      method: 'GET',
+    });
+  }
+
+  async getFriendPaymentMethods(friendId) {
+    return await this.makeRequest(`/users/${friendId}/payment-methods`, {
+      method: 'GET',
+    });
+  }
+
   // friend methods
   // add friend method
   async addFriend(friendEmail) {
@@ -327,7 +320,6 @@ class ApiService {
   }
 
  async createTransaction(transactionData) {
-  console.log('Request body:', transactionData); // debug
   return await this.makeRequest('/transactions', {
     method: 'POST',
     body: transactionData, // pass object directly
@@ -363,7 +355,23 @@ class ApiService {
   }
 
   async getUserBalances() {
-    return await this.makeRequest(`/transactions/user/balances`);
+    try {
+      const result = await this.makeRequest(`/transactions/user/balances`);
+      return result;
+    } catch (error) {
+      console.error('Error fetching user balances:', error.message);
+      throw error;
+    }
+  }
+
+  async getFriendBalance(friendId) {
+    try {
+      const result = await this.makeRequest(`/transactions/friend/${friendId}/balance`);
+      return result;
+    } catch (error) {
+      console.error('Error fetching friend balance:', error.message);
+      throw error;
+    }
   }
 
   // Friend request methods

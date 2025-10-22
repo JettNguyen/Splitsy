@@ -382,18 +382,18 @@ export const DataProvider = ({ children }) => {
   };
 
   const getUserTransactions = () => {
-    console.log('Calculating user transactions for user:', currentUser);
+    // Return transactions where the current user is the payer or a participant
     if (!currentUser) return [];
     return transactions.filter(transaction =>
-      transaction.payer._id === currentUser.id ||
-      transaction.participants.some(p => p.user._id === currentUser.id)
+      (transaction.payer && (transaction.payer._id || transaction.payer) === (currentUser.id || currentUser._id)) ||
+      (Array.isArray(transaction.participants) && transaction.participants.some(p => (p.user && (p.user._id || p.user) === (currentUser.id || currentUser._id))))
     );
   };
   const calculateUserBalance = useCallback(() => {
     if (!currentUser || !Array.isArray(transactions)) {
       return { owed: 0, owes: 0, net: 0 };
     }
-    
+    // Compute what others owe the user (owed) and what the user owes (owes)
     let totalOwed = 0;
     let totalOwing = 0;
     
@@ -403,13 +403,33 @@ export const DataProvider = ({ children }) => {
           return;
         }
         
-        if (transaction.paidBy === currentUser.id) {
-          const splitAmount = transaction.amount / transaction.participants.length;
-          totalOwed += splitAmount * (transaction.participants.length - 1);
-        } 
-        else if (transaction.participants.includes(currentUser.id)) {
-          const splitAmount = transaction.amount / transaction.participants.length;
-          totalOwing += splitAmount;
+        const currentUserId = currentUser.id || currentUser._id;
+        const payerId = transaction.payer?._id || transaction.payer?.id || transaction.payer;
+        // If the current user is the payer, others owe their share; otherwise, the user owes their participant amount
+        // Check if current user is the payer
+        if (payerId === currentUserId) {
+          // User paid the full amount
+          const userParticipant = transaction.participants.find(p => {
+            const participantId = p.user?._id || p.user?.id || p.user;
+            return participantId === currentUserId;
+          });
+          
+            if (userParticipant) {
+              // User paid the full amount but also owes their share
+              // So others owe: (total amount - user's share)
+              const othersOwe = transaction.amount - userParticipant.amount;
+              totalOwed += othersOwe;
+            }
+        } else {
+          // User is a participant, check how much they owe
+          const userParticipant = transaction.participants.find(p => {
+            const participantId = p.user?._id || p.user?.id || p.user;
+            return participantId === currentUserId;
+          });
+          
+            if (userParticipant) {
+              totalOwing += userParticipant.amount;
+            }
         }
       });
     } 
@@ -418,11 +438,15 @@ export const DataProvider = ({ children }) => {
       return { owed: 0, owes: 0, net: 0 };
     }
     
-    return {
+    const result = {
       owed: Math.max(0, totalOwed),
       owes: Math.max(0, totalOwing),
       net: totalOwed - totalOwing
     };
+    
+    // Result holds the totals: owed (others owe user), owes (user owes), net (owed - owes)
+    
+    return result;
   }, [currentUser, transactions]);
 
 const fetchUserBalances = async () => {
@@ -430,17 +454,15 @@ const fetchUserBalances = async () => {
 
   try {
     const response = await apiService.getUserBalances();
-    console.log('Raw response from /user/balances:', response);
 
-    if (response.success && response.data) {
+    if (response && response.success && response.data) {
       setUserBalances(response.data);
-      console.log('User balances set:', response.data);
     } else {
-      console.warn('Failed to fetch user balances', response.message, response);
+      console.warn('Failed to fetch user balances:', response?.message || 'Unknown error');
       setUserBalances(null);
     }
   } catch (error) {
-    console.error('Error fetching user balances:', error);
+    console.error('Error fetching user balances:', error.message);
     setUserBalances(null);
   }
 };

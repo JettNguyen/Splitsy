@@ -113,7 +113,7 @@ function BalanceCard({ title, amount, color, icon, theme }) {
         </ThemedText>
       </View>
       <ThemedText style={AppStyles.balanceAmount} color={color} theme={theme}>
-        ${amount}
+        ${Number(amount).toFixed(2)}
       </ThemedText>
     </View>
   );
@@ -133,42 +133,108 @@ function EmptyState({ title, subtitle, theme }) {
   );
 }
 
-function TransactionItem({ transaction, theme, currentUserId }) {
+function TransactionItem({ transaction, theme, currentUserId, onSettleTransaction }) {
   // Determine if this user is owed money or owes money
   const isPayer = transaction.payer?._id === currentUserId || transaction.payer?.id === currentUserId;
   const isOwed = isPayer; // If user is payer, others owe them
   const color = isOwed ? theme.colors.success : theme.colors.error;
   
-  // Find the other user involved (if payer, show participant; if participant, show payer)
-  const otherUser = isPayer 
-    ? transaction.participants?.[0]?.name 
-    : transaction.payer;
+  // Find the other user involved
+  let otherUserName = '';
+  if (transaction.group) {
+    // For group transactions, show the group name
+    otherUserName = transaction.group?.name || 'Group';
+  } else {
+    // For friend transactions, show the other person's name
+    if (isPayer) {
+      // Current user paid, so show who they lent to
+      const participant = transaction.participants?.find(p => 
+        (p.user?._id || p.user) !== currentUserId
+      );
+      otherUserName = participant?.user?.name || participant?.name || 'Friend';
+    } else {
+      // Current user owes, so show who they borrowed from
+      otherUserName = transaction.payer?.name || 'Friend';
+    }
+  }
+
+  // Clean up transaction description by removing unnecessary text
+  const cleanDescription = transaction.description
+    ?.replace(/- Friend Transaction$/i, '')
+    ?.replace(/Friend Transaction/i, '')
+    ?.trim() || 'Expense';
+
+  // Determine settlement status and text
+  const getStatusInfo = () => {
+    if (transaction.status === 'settled' || transaction.settled) {
+      return {
+        text: 'Settled',
+        icon: '✓',
+        color: '#4CAF50', // Green for settled
+        backgroundColor: '#4CAF50' + '20' // 20% opacity
+      };
+    } else {
+      return {
+        text: 'Tap to settle',
+        icon: '○',
+        color: '#FF9800', // Orange for pending
+        backgroundColor: '#FF9800' + '15' // 15% opacity
+      };
+    }
+  };
+
+  const statusInfo = getStatusInfo();
+  const canSettle = !transaction.settled && transaction.status !== 'settled';
+
+  const handleStatusPress = () => {
+    if (canSettle) {
+      Alert.alert(
+        'Settle Transaction',
+        `Mark "${cleanDescription}" as settled?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Settle', 
+            style: 'default',
+            onPress: () => onSettleTransaction?.(transaction._id || transaction.id)
+          }
+        ]
+      );
+    }
+  };
   
   return (
     <View style={[AppStyles.transactionCard, { backgroundColor: theme.colors.card }]}>
       <View style={AppStyles.transactionRow}>
         <View style={[AppStyles.avatar, { backgroundColor: color }]}>
-          <Text style={AppStyles.avatarText}>{otherUser?.name?.[0] || 'U'}</Text>
+          <Text style={AppStyles.avatarText}>{otherUserName?.[0] || 'U'}</Text>
         </View>
         <View style={AppStyles.transactionInfo}>
           <ThemedText style={AppStyles.transactionTitle} theme={theme}>
-            {transaction.description}
+            {cleanDescription}
           </ThemedText>
           <ThemedText style={AppStyles.transactionSubtitle} color={theme.colors.textSecondary} theme={theme}>
-            {transaction.group?.name || 'Personal'} • {isOwed ? 'You lent' : 'You borrowed'}
+            {transaction.group ? 
+              `${otherUserName} • ${isOwed ? 'You lent' : 'You borrowed'}` : 
+              `${isOwed ? `${otherUserName} owes you` : `You owe ${otherUserName}`}`
+            }
           </ThemedText>
         </View>
         <View style={AppStyles.transactionAmount}>
-          <ThemedText style={AppStyles.amount} color={color} theme={theme}>
-            {isOwed ? '+' : '-'}${transaction.amount}
-          </ThemedText>
-          <View style={[AppStyles.status, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[
-              AppStyles.statusText, 
-              { color: transaction.settled ? theme.colors.success : theme.colors.textSecondary }
-            ]}>
-              {transaction.settled ? '✓' : '○'}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <ThemedText style={AppStyles.amount} color={color} theme={theme}>
+              {isOwed ? '+' : '-'}${transaction.amount}
+            </ThemedText>
+            <TouchableOpacity 
+              style={[AppStyles.statusCircle, { 
+                backgroundColor: statusInfo.color,
+                opacity: canSettle ? 1 : 0.7
+              }]}
+              onPress={handleStatusPress}
+              disabled={!canSettle}
+            >
+              {/* Empty circle with just color indication */}
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -176,10 +242,40 @@ function TransactionItem({ transaction, theme, currentUserId }) {
   );
 }
 
-function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpense, currentUser }) {
+function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpense, currentUser, fetchUserBalances }) {
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  const handleSettleTransaction = async (transactionId) => {
+    try {
+      const result = await apiService.markTransactionPaid(transactionId, currentUser.id, true);
+      
+      if (result.success) {
+        // Update the local state to reflect the settlement
+        setRecentActivity(prev => 
+          prev.map(transaction => 
+            (transaction._id || transaction.id) === transactionId 
+              ? { ...transaction, status: 'settled', settled: true }
+              : transaction
+          )
+        );
+        
+        // Refresh user balances to reflect the settlement
+        if (fetchUserBalances) {
+          await fetchUserBalances();
+        }
+        
+        Alert.alert('Success', 'Transaction marked as settled!');
+      } else {
+        Alert.alert('Error', result.message || 'Failed to settle transaction');
+      }
+    } catch (error) {
+      console.error('Error settling transaction:', error);
+      Alert.alert('Error', 'Failed to settle transaction');
+    }
+  };
+
   useEffect(() => {
   const fetchTransactions = async () => {
     try {
@@ -234,19 +330,6 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
         />
       </View>
 
-      <View style={[AppStyles.netBalance, { backgroundColor: theme.colors.card }]}>
-        <ThemedText style={AppStyles.netLabel} color={theme.colors.textSecondary} theme={theme}>
-          Net Balance
-        </ThemedText>
-        <ThemedText 
-          style={AppStyles.netAmount}
-          color={balance.net >= 0 ? theme.colors.success : theme.colors.error}
-          theme={theme}
-        >
-          ${Math.abs(balance.net).toFixed(2)}
-        </ThemedText>
-      </View>
-
       <View style={AppStyles.section}>
         <ThemedText style={AppStyles.sectionTitle} theme={theme}>Recent Activity</ThemedText>
         
@@ -267,6 +350,7 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
               transaction={transaction} 
               theme={theme}
               currentUserId={currentUser?.id || currentUser?._id}
+              onSettleTransaction={handleSettleTransaction}
             />
           ))
         )}
@@ -382,6 +466,7 @@ function MainApp() {
   const userTransactions = getUserTransactions() || [];
   // Prefer backend-computed balances when available (userBalances comes from /api/transactions/user/balances)
   let balance;
+  
   if (userBalances && userBalances.summary) {
     balance = {
       owed: userBalances.summary.totalOwedToMe || 0,
@@ -432,8 +517,9 @@ function MainApp() {
       await createTransaction(payload);
       await getUserTransactions();
       // Refresh server-side computed balances and update the context
+      await fetchUserBalances();
+      
       if(expenseData.groupId) {
-        await fetchUserBalances();
         const txResp = await apiService.getTransactions(expenseData.groupId);
         //setGroupTransactions(txResp || []); this does not even exist, only works when commented out
         const balances = await apiService.getGroupBalances(expenseData.groupId);
@@ -443,7 +529,7 @@ function MainApp() {
   hideAddExpenseModal();
       Alert.alert('Success', 'Expense added successfully');
     } catch (error) {
-      console.log('ADD Expense Error:', error);
+    console.error('Failed to add expense:', error && (error.message || error));
       Alert.alert('Error', 'Failed to add expense');
     }
   };
@@ -459,6 +545,7 @@ function MainApp() {
             balance={balance}
             onAddExpense={() => setShowAddExpense(true)}
             currentUser={currentUser}
+            fetchUserBalances={fetchUserBalances}
           />
         );
       case 'friends':

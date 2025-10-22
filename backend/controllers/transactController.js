@@ -1,15 +1,12 @@
+// Transaction controller: handles creating, listing, updating, and settling transactions.
+// Comments in this file are written for clarity (inputs/outputs and high-level intent).
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 
 
 
 async function createTransaction(req, res) {
-  console.log("Incoming POST /api/transactions body:", req.body);
-
-    // Debug logs to help diagnose incoming submissions
-    console.log('createTransaction called - headers:', req.headers && { authorization: req.headers.authorization });
-    try { console.log('createTransaction body:', JSON.stringify(req.body)); } catch (e) { console.log('createTransaction body (non-serializable)'); }
-    console.log('req.user:', req.user ? req.user._id : null);
+  // Create a new transaction from request body. Validations below ensure required fields are present.
   try {
     const {
       description,
@@ -34,28 +31,31 @@ async function createTransaction(req, res) {
       return res.status(400).json({ message: 'valid payer id is required' });
     }
 
-    const actualGroup = group || payer;
-
     const mappedParticipants = participants.map(p => 
       typeof p === 'string' ? { user: p, paid: false } : { user: p.user, paid: false }
     );
 
-    const tx = new Transaction({
+    const transactionData = {
       description,
       amount,
       currency: currency || 'USD',
       payer,
-      group: actualGroup,
       category: category || 'other',
       splitMethod: splitMethod || 'equal',
       participants: mappedParticipants,
       notes,
       tags,
       createdBy: req.user ? req.user._id : payer
-    });
+    };
 
-    const saved = await tx.save();
-    console.log('Transaction saved:', saved);
+    // Only set group if it's provided and valid
+    if (group && mongoose.Types.ObjectId.isValid(group)) {
+      transactionData.group = group;
+    }
+
+    const tx = new Transaction(transactionData);
+
+  const saved = await tx.save();
 
     const populated = await Transaction.findById(saved._id)
       .populate('payer', 'name email')
@@ -64,7 +64,7 @@ async function createTransaction(req, res) {
 
     return res.status(201).json(populated);
   } catch (err) {
-    console.error('createTransaction error', err);
+    console.error('Transaction controller - createTransaction error:', err && (err.message || err));
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
@@ -116,7 +116,7 @@ async function getTransactions(req, res) {
       transactions
     });
   } catch (err) {
-    console.error('getTransactions error', err);
+    console.error('Transaction controller - getTransactions error:', err && (err.message || err));
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
@@ -136,7 +136,7 @@ async function getTransactionById(req, res) {
 
     return res.json(tx);
   } catch (err) {
-    console.error('getTransactionById error', err);
+    console.error('Transaction controller - getTransactionById error:', err && (err.message || err));
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
@@ -160,7 +160,7 @@ async function updateTransaction(req, res) {
 
     return res.json(updated);
   } catch (err) {
-    console.error('updateTransaction error', err);
+    console.error('Transaction controller - updateTransaction error:', err && (err.message || err));
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
@@ -176,7 +176,7 @@ async function deleteTransaction(req, res) {
 
     return res.json({ message: 'Deleted', id: deleted._id });
   } catch (err) {
-    console.error('deleteTransaction error', err);
+    console.error('Transaction controller - deleteTransaction error:', err && (err.message || err));
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
@@ -198,7 +198,7 @@ async function markParticipantPaid(req, res) {
     const refreshed = await Transaction.findById(id).populate('participants.user', 'name email');
     return res.json(refreshed);
   } catch (err) {
-    console.error('markParticipantPaid error', err);
+    console.error('Transaction controller - markParticipantPaid error:', err && (err.message || err));
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
@@ -220,7 +220,7 @@ async function addApproval(req, res) {
     const refreshed = await Transaction.findById(id).populate('approvals.user', 'name email');
     return res.json(refreshed);
   } catch (err) {
-    console.error('addApproval error', err);
+    console.error('Transaction controller - addApproval error:', err && (err.message || err));
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
@@ -236,7 +236,7 @@ async function getUserGroupBalance(req, res) {
     const result = await Transaction.getUserGroupBalance(userId, groupId);
     return res.json(result);
   } catch (err) {
-    console.error('getUserGroupBalance error', err);
+    console.error('Transaction controller - getUserGroupBalance error:', err && (err.message || err));
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
@@ -251,4 +251,3 @@ module.exports = {
   addApproval,
   getUserGroupBalance
 };
-console.log("transactController =", module.exports);

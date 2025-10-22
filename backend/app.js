@@ -40,6 +40,15 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Development-only request logger (keeps production logs quiet)
+if ((process.env.NODE_ENV || 'development') === 'development') {
+  app.use((req, res, next) => {
+    // Keep this concise to avoid noisy logs in development
+    console.debug && console.debug(`${req.method} ${req.path}`);
+    next();
+  });
+}
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);

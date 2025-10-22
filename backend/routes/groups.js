@@ -66,7 +66,7 @@ router.post('/:id/leave', groupMember, leaveGroup);
 
 // Routes that require admin privileges
 router.put('/:id', groupMember, groupAdmin, updateGroup);
-router.delete('/:id', groupMember, groupAdmin, deleteGroup);
+router.delete('/:id', groupMember, deleteGroup);  // Removed groupAdmin - check in controller
 router.post('/:id/members', groupMember, addMemberValidation, addMember);
 router.delete('/:id/members/:userId', groupMember, groupAdmin, removeMember);
 

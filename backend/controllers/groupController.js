@@ -244,7 +244,7 @@ const updateGroup = async (req, res) => {
 // @access  Private (Admin only)
 const deleteGroup = async (req, res) => {
   try {
-    const group = await Group.findById(req.params.id);
+    const group = await Group.findById(req.params.id).populate('members.user', 'name email');
 
     if (!group) {
       return res.status(404).json({

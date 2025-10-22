@@ -18,6 +18,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import apiService from '../services/apiService';
+import AppStyles from '../styles/AppStyles';
 
 const PaymentMethodsScreen = ({ visible, onClose }) => {
   const { theme } = useTheme();
@@ -140,22 +142,31 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
 
   const addPaymentMethod = () => {
     if (!newMethod.handle.trim()) return;
-    
+
     let processedHandle = newMethod.handle.trim();
-    
     if (newMethod.type === 'CashApp' && processedHandle.startsWith('$')) {
       processedHandle = processedHandle.substring(1);
     }
-    
-    const method = {
-      id: Date.now().toString(),
-      type: newMethod.type,
-      handle: processedHandle,
-    };
-    
-    setPaymentMethods([...paymentMethods, method]);
-    setNewMethod({ type: 'Venmo', handle: '' });
-    setShowAddModal(false);
+
+    // Call backend to persist
+    (async () => {
+      try {
+        const resp = await apiService.addPaymentMethod({ type: newMethod.type, handle: processedHandle });
+        if (resp && resp.success && resp.data && resp.data.paymentMethods) {
+          setPaymentMethods(resp.data.paymentMethods.map(m => ({ id: m._id || m.id || m._id, type: m.type, handle: m.handle })));
+        } else if (resp && resp.paymentMethods) {
+          setPaymentMethods(resp.paymentMethods);
+        } else {
+          // fallback: append locally
+          setPaymentMethods(prev => [...prev, { id: Date.now().toString(), type: newMethod.type, handle: processedHandle }]);
+        }
+        setNewMethod({ type: 'Venmo', handle: '' });
+        setShowAddModal(false);
+      } catch (err) {
+        console.error('Error adding payment method:', err);
+        Alert.alert('Error', err.message || 'Failed to add payment method');
+      }
+    })();
   };
 
   const deletePaymentMethod = (id) => {
@@ -167,13 +178,49 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
         { 
           text: 'Delete', 
           style: 'destructive',
-          onPress: () => {
-            setPaymentMethods(paymentMethods.filter(method => method.id !== id));
+          onPress: async () => {
+            try {
+              const resp = await apiService.removePaymentMethod(id);
+              if (resp && resp.success && resp.data && resp.data.paymentMethods) {
+                setPaymentMethods(resp.data.paymentMethods.map(m => ({ id: m._id || m.id, type: m.type, handle: m.handle })));
+              } else if (resp && resp.found) {
+                // fallback: filter locally
+                setPaymentMethods(prev => prev.filter(method => method.id !== id));
+              } else if (resp && resp.paymentMethods) {
+                setPaymentMethods(resp.paymentMethods);
+              } else {
+                setPaymentMethods(prev => prev.filter(method => method.id !== id));
+              }
+            } catch (err) {
+              console.error('Error removing payment method:', err);
+              Alert.alert('Error', err.message || 'Failed to remove payment method');
+            }
           }
         }
       ]
     );
   };
+
+  // Load payment methods from server when modal opens
+  useEffect(() => {
+    if (!visible) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const resp = await apiService.getPaymentMethods();
+        if (!mounted) return;
+        if (resp && resp.data && resp.data.paymentMethods) {
+          setPaymentMethods(resp.data.paymentMethods.map(m => ({ id: m._id || m.id, type: m.type, handle: m.handle })));
+        } else if (resp && resp.paymentMethods) {
+          setPaymentMethods(resp.paymentMethods);
+        }
+      } catch (err) {
+        console.error('Error loading payment methods:', err);
+        Alert.alert('Error', err.message || 'Failed to load payment methods');
+      }
+    })();
+    return () => { mounted = false; }
+  }, [visible]);
 
   const PaymentMethodCard = ({ method }) => (
     <View style={[styles.methodCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -262,10 +309,8 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
             )}
 
             {paymentMethods.length === 0 && !showAddModal && getAvailablePaymentTypes().length > 0 && (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                  No payment methods added yet
-                </Text>
+              <View style={[AppStyles.empty, { justifyContent: 'center' }]}>
+                <Text style={[AppStyles.emptyText, { color: theme.colors.textSecondary }]}>No payment methods added yet</Text>
                 <TouchableOpacity 
                   style={[styles.emptyButton, { backgroundColor: theme.colors.primary }]}
                   onPress={() => setShowAddModal(true)}

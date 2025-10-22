@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../context/ApiDataContext';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
+import AppStyles from '../styles/AppStyles';
 
 const SettlementScreen = ({ visible, onClose }) => {
   const { theme } = useTheme();
@@ -247,12 +248,10 @@ const SettlementScreen = ({ visible, onClose }) => {
 
         <ScrollView style={[styles.modalContent, { backgroundColor: theme.colors.background }]}>
           {settlements.length === 0 ? (
-            <View style={styles.emptyState}>
+            <View style={AppStyles.empty}>
               <Ionicons name="checkmark-circle" size={64} color={theme.colors.success} style={{ marginBottom: 16 }} />
-              <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>All Settled Up!</Text>
-              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                You don't have any outstanding balances with anyone.
-              </Text>
+              <Text style={[AppStyles.emptyTitle, { color: theme.colors.text }]}>All Settled Up!</Text>
+              <Text style={[AppStyles.emptyText, { color: theme.colors.textSecondary }]}>You don't have any outstanding balances with anyone.</Text>
             </View>
           ) : (
             <>

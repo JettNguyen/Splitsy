@@ -11,30 +11,53 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/ApiDataContext';
 import { useUser } from '../context/UserContext';
-import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
+import AppStyles, { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
+import apiService from '../services/apiService';
 
 
 
 const ActivityScreen = () => {
   const { theme } = useTheme();
   
-  const {userBalances, fetchUserBalances, getUserGroups, getUserTransactions } = useData();
+  const {userBalances, fetchUserBalances, getUserGroups } = useData();
   const userGroups = getUserGroups();
-  const userTransactions = getUserTransactions();
-
   const { currentUser } = useUser();
   const [filter, setFilter] = useState('all');
+  const [userTransactions, setUserTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load the user's transactions (includes friend transactions)
   useEffect(() => {
-  fetchUserBalances();
-}, []); // run once on mount
+    const loadUserTransactions = async () => {
+      if (!currentUser) return;
+      
+      try {
+        setLoading(true);
+        const result = await apiService.getUsersTransactions(currentUser.id);
+        
+        if (result?.success) {
+          setUserTransactions(result.data || []);
+        } else {
+          console.error('Failed to load user transactions:', result?.message);
+          setUserTransactions([]);
+        }
+      } catch (error) {
+        console.error('Error loading user transactions:', error);
+        setUserTransactions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-useEffect(() => {
-  fetchUserBalances(); 
-}, [userTransactions]); // also run when transactions change
+    loadUserTransactions();
+  }, [currentUser]);
 
+  // Fetch balances once when the component mounts
+  useEffect(() => {
+    fetchUserBalances();
+  }, []);
 
   const getFilteredActivity = () => {
-    console.log('User Transactions:', userTransactions);
     let activities = [...(userTransactions || [])];
     
     activities.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
@@ -68,31 +91,91 @@ useEffect(() => {
 
   const getActivityIcon = (transaction) => {
     if (transaction.type === 'settlement') return 'card';
-    if (transaction.paidBy === currentUser?.id) return 'arrow-up';
-    return 'arrow-down';
+    
+    // Calculate if user lent money (arrow up) or borrowed money (arrow down)
+    const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
+    const userParticipant = transaction.participants?.find(p => 
+      p.user === currentUser?.id || p.user?._id === currentUser?.id
+    );
+    const userOwedAmount = userParticipant?.amount || 0;
+    const userPaidAmount = userWasPayer ? transaction.amount : 0;
+    const netAmount = userPaidAmount - userOwedAmount;
+    
+    // Arrow up for lending money, arrow down for borrowing money
+    return netAmount > 0 ? 'arrow-up' : 'arrow-down';
   };
 
   const getActivityColor = (transaction) => {
     if (transaction.type === 'settlement') return theme.colors.accent;
-    if (transaction.paidBy === currentUser?.id) return theme.colors.error;
-    return theme.colors.success;
+    
+    // Calculate if user lent money (positive) or borrowed money (negative)
+    const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
+    const userParticipant = transaction.participants?.find(p => 
+      p.user === currentUser?.id || p.user?._id === currentUser?.id
+    );
+    const userOwedAmount = userParticipant?.amount || 0;
+    const userPaidAmount = userWasPayer ? transaction.amount : 0;
+    const netAmount = userPaidAmount - userOwedAmount;
+    
+    // Green for lending money (positive), red for borrowing money (negative)
+    return netAmount > 0 ? theme.colors.success : theme.colors.error;
   };
 
   const getActivityDescription = (transaction) => {
-    const group = userGroups?.find(g => g.id === transaction.group);
-    const groupName = group?.name || 'Unknown Group';
-    
     if (transaction.type === 'settlement') {
+      const group = userGroups?.find(g => g.id === transaction.group);
+      const groupName = group?.name || 'Unknown Group';
       return `Settlement in ${groupName}`;
     }
     
-    if (transaction.paidBy === currentUser?.id) {
-      return `You paid for ${transaction.description} in ${groupName}`;
+    // Determine if the current user was the payer
+    const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
+    
+    // Calculate what the user owes vs what they paid
+    const userParticipant = transaction.participants?.find(p => 
+      p.user === currentUser?.id || p.user?._id === currentUser?.id
+    );
+    const userOwedAmount = userParticipant?.amount || 0;
+    const userPaidAmount = userWasPayer ? transaction.amount : 0;
+    
+    // Determine if user lent money (paid more than they owe) or borrowed money (paid less than they owe)
+    const isLending = userPaidAmount > userOwedAmount;
+    const isBorrowing = userPaidAmount < userOwedAmount;
+    
+    // Find the other person's name for friend transactions
+    let otherPersonName = '';
+    if (!transaction.group) {
+      if (userWasPayer) {
+        // Current user paid, find who they lent to
+        const otherParticipant = transaction.participants?.find(p => 
+          (p.user?._id || p.user) !== currentUser?.id
+        );
+        otherPersonName = otherParticipant?.user?.name || otherParticipant?.name || 'Friend';
+      } else {
+        // Current user owes, show who they borrowed from
+        otherPersonName = transaction.payer?.name || 'Friend';
+      }
     }
     
-    const paidByUser = transaction.participants?.find(p => p.userId === transaction.paidBy);
-    const paidByName = paidByUser?.name || 'Someone';
-    return `${paidByName} paid for ${transaction.description} in ${groupName}`;
+  // Build a friendly description text for each activity item
+    const itemName = transaction.description;
+    const groupName = transaction.group ? 
+      (userGroups?.find(g => g.id === transaction.group)?.name || 'Unknown Group') : 
+      null;
+    
+    if (isLending) {
+      return groupName ? 
+        `You lent • ${itemName} • ${groupName}` : 
+        `${otherPersonName} owes you • ${itemName}`;
+    } else if (isBorrowing) {
+      return groupName ? 
+        `You borrowed • ${itemName} • ${groupName}` : 
+        `You owe ${otherPersonName} • ${itemName}`;
+    } else {
+      return groupName ? 
+        `Split evenly • ${itemName} • ${groupName}` : 
+        `Split evenly • ${itemName}`;
+    }
   };
 
   const FilterButton = ({ filterType, label }) => (
@@ -117,46 +200,60 @@ useEffect(() => {
     </TouchableOpacity>
   );
 
-  const ActivityItem = ({ transaction }) => (
-    <View style={[styles.activityItem, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-      <View style={[styles.activityIcon, { backgroundColor: getActivityColor(transaction) }]}>
-        <Ionicons 
-          name={getActivityIcon(transaction)} 
-          size={18} 
-          color="white"
-        />
+  const ActivityItem = ({ transaction }) => {
+    // Calculate user's financial position for this transaction
+    const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
+    const userParticipant = transaction.participants?.find(p => 
+      p.user === currentUser?.id || p.user?._id === currentUser?.id
+    );
+    const userOwedAmount = userParticipant?.amount || 0;
+    const userPaidAmount = userWasPayer ? transaction.amount : 0;
+    
+    // Net amount: positive means user lent money, negative means user borrowed money
+    const netAmount = userPaidAmount - userOwedAmount;
+    const isPositive = netAmount > 0;
+    
+    return (
+      <View style={[styles.activityItem, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <View style={[styles.activityIcon, { backgroundColor: getActivityColor(transaction) }]}>
+          <Ionicons 
+            name={getActivityIcon(transaction)} 
+            size={18} 
+            color="white"
+          />
+        </View>
+        
+        <View style={styles.activityContent}>
+          <Text style={[styles.activityDescription, { color: theme.colors.text }]}>
+            {getActivityDescription(transaction)}
+          </Text>
+          <Text style={[styles.activityDate, { color: theme.colors.textSecondary }]}>
+            {formatDate(transaction.date || transaction.createdAt)}
+          </Text>
+        </View>
+        
+        <View style={styles.activityAmount}>
+          <Text style={[
+            styles.amountText, 
+            { 
+              color: isPositive ? theme.colors.success : theme.colors.error 
+            }
+          ]}>
+            {isPositive ? '+' : ''}${Math.abs(netAmount).toFixed(2)}
+          </Text>
+        </View>
       </View>
-      
-      <View style={styles.activityContent}>
-        <Text style={[styles.activityDescription, { color: theme.colors.text }]}>
-          {getActivityDescription(transaction)}
-        </Text>
-        <Text style={[styles.activityDate, { color: theme.colors.textSecondary }]}>
-          {formatDate(transaction.date || transaction.createdAt)}
-        </Text>
-      </View>
-      
-      <View style={styles.activityAmount}>
-        <Text style={[
-          styles.amountText, 
-          { 
-            color: transaction.paidBy === currentUser?.id ? theme.colors.error : theme.colors.success 
-          }
-        ]}>
-          {transaction.paidBy === currentUser?.id ? '-' : '+'}${transaction.amount?.toFixed(2) || '0.00'}
-        </Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   const filteredActivity = getFilteredActivity();
 
   return (
     
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[AppStyles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView 
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
+        style={AppStyles.main}
+        contentContainerStyle={AppStyles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/*header*/}
@@ -165,20 +262,7 @@ useEffect(() => {
             Recent Activity
           </Text>
         </View>
-        {/* User Balances */}
-        {userBalances && (
-          <View style={{ paddingHorizontal: 25, marginBottom: 20 }}>
-            <Text style={{ color: theme.colors.text, fontWeight: '600' }}>
-              Net Balance: ${userBalances.summary.netBalance.toFixed(2)}
-            </Text>
-            <Text style={{ color: theme.colors.textSecondary }}>
-              You are owed: ${userBalances.summary.totalOwedToMe.toFixed(2)}
-            </Text>
-            <Text style={{ color: theme.colors.textSecondary }}>
-              You owe: ${userBalances.summary.totalIOwe.toFixed(2)}
-            </Text>
-          </View>
-        )}
+        {/* (Balances display removed from Activity view per UX request) */}
 
 
         {/*filter buttons*/}
@@ -190,153 +274,99 @@ useEffect(() => {
       
         {/*activity list*/}
         <View style={styles.activityContainer}>
-          {filteredActivity.length > 0 ? (
+          {loading ? (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                Loading...
+              </Text>
+            </View>
+              ) : filteredActivity.length > 0 ? (
             filteredActivity.map((transaction, index) => (
               <ActivityItem key={transaction.id || index} transaction={transaction} />
             ))
           ) : (
-            <View style={styles.emptyState}>
-              <View style={[styles.emptyIcon, { backgroundColor: theme.colors.accent }]}>
-                <Ionicons name="list" size={32} color="white" />
-              </View>
-              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-                No Activity Yet
-              </Text>
-              <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                Your recent expenses and settlements will appear here
-              </Text>
-            </View>
+                <View style={AppStyles.empty}>
+                  <View style={[AppStyles.emptyIcon, { backgroundColor: theme.colors.accent }]}>
+                    <Ionicons name="list" size={32} color="white" />
+                  </View>
+                  <Text style={[AppStyles.emptyTitle, { color: theme.colors.text }] }>
+                    No Activity Yet
+                  </Text>
+                  <Text style={[AppStyles.emptyText, { color: theme.colors.textSecondary }]}>
+                    Your recent expenses and settlements will appear here
+                  </Text>
+                </View>
           )}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-  header: {
-    padding: 25,
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    fontFamily: FONT_FAMILY_BOLD,
-  },
-  subtitle: {
-    fontSize: 16,
-    fontFamily: FONT_FAMILY,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    marginHorizontal: 25,
-    borderRadius: 25,
-    padding: 5,
-    marginBottom: 25,
-    borderWidth: 0.5,
-    borderColor: 'rgba(148, 163, 184, 0.3)',
-    shadowColor: '#673e9dff',
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  activityContainer: {
-    paddingHorizontal: 25,
-  },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    marginBottom: 10,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    shadowColor: '#673e9dff',
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityDescription: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 5,
-    fontFamily: FONT_FAMILY,
-  },
-  activityDate: {
-    fontSize: 14,
-    fontFamily: FONT_FAMILY,
-  },
-  activityAmount: {
-    alignItems: 'flex-end',
-  },
-  amountText: {
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: FONT_FAMILY_BOLD,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 15,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 10,
-    textAlign: 'center',
-    fontFamily: FONT_FAMILY_BOLD,
-  },
-  emptyText: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-    fontFamily: FONT_FAMILY,
-  },
-});
+    const styles = StyleSheet.create({
+      header: {
+        padding: 25,
+        paddingBottom: 10,
+      },
+      title: {
+        fontSize: 28,
+        fontWeight: '800',
+        fontFamily: FONT_FAMILY_BOLD,
+      },
+      subtitle: {
+        fontSize: 16,
+        fontFamily: FONT_FAMILY,
+      },
+      filterContainer: {
+        flexDirection: 'row',
+        marginHorizontal: 25,
+        borderRadius: 25,
+        padding: 5,
+        marginBottom: 25,
+        borderWidth: 0.5,
+        borderColor: 'rgba(148, 163, 184, 0.3)',
+        shadowColor: '#673e9dff',
+        shadowOffset: {
+          width: 0,
+          height: 0,
+        },
+        shadowOpacity: 0.5,
+        shadowRadius: 12,
+        elevation: 5,
+      },
+      filterButton: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: 20,
+        alignItems: 'center',
+      },
+      filterButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+      },
+      activityContainer: {
+        paddingHorizontal: 25,
+      },
+      activityContent: {
+        flex: 1,
+      },
+      activityDescription: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 5,
+        fontFamily: FONT_FAMILY,
+      },
+      activityDate: {
+        fontSize: 14,
+        fontFamily: FONT_FAMILY,
+      },
+      activityAmount: {
+        alignItems: 'flex-end',
+      },
+      amountText: {
+        fontSize: 18,
+        fontWeight: '700',
+        fontFamily: FONT_FAMILY_BOLD,
+      },
+    });
 
 export default ActivityScreen;

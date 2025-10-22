@@ -9,7 +9,8 @@ const {
   updateDetails,
   updatePassword,
   addPaymentMethod,
-  removePaymentMethod
+  removePaymentMethod,
+  getPaymentMethods
 } = require('../controllers/authController');
 
 const { protect } = require('../middleware/auth');
@@ -74,5 +75,6 @@ router.put('/me', updateDetails);
 router.put('/updatepassword', updatePasswordValidation, updatePassword);
 router.post('/payment-methods', paymentMethodValidation, addPaymentMethod);
 router.delete('/payment-methods/:methodId', removePaymentMethod);
+router.get('/payment-methods', getPaymentMethods);
 
 module.exports = router;

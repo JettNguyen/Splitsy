@@ -77,16 +77,29 @@ exports.removeFriend = async (req, res) => {
 };
 
 // Debug helper: return the authenticated user's id and populated friends
-exports.debugUser = async (req, res) => {
+
+
+// Get a friend's public payment methods by user id
+exports.getFriendPaymentMethods = async (req, res) => {
   try {
-    const UserModel = require('../models/User');
-    if (!req.user || !req.user._id) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const user = await UserModel.findById(req.user._id).populate('friends', 'name email _id');
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    res.json({ success: true, user: { id: user._id, name: user.name, email: user.email, friends: user.friends } });
-  } catch (error) {
-    console.error('Debug user error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    // Minimal debug output; avoid printing tokens or full headers in production
+    if ((process.env.NODE_ENV || 'development') === 'development') {
+      const authHeader = req.headers.authorization || '';
+      const tokenPreview = authHeader.startsWith('Bearer ') ? `${authHeader.slice(0, 20)}...` : authHeader;
+      console.debug && console.debug('[getFriendPaymentMethods] incoming:', { method: req.method, url: req.originalUrl, authPresent: !!authHeader, tokenPreview });
+    }
+    const friendId = req.params.friendId;
+    if (!friendId) return res.status(400).json({ success: false, message: 'Missing friend id' });
+
+    const friend = await User.findById(friendId).select('paymentMethods name email');
+    if (!friend) return res.status(404).json({ success: false, message: 'Friend not found' });
+
+    // only expose non-sensitive fields
+    const methods = (friend.paymentMethods || []).map(m => ({ id: m._id, type: m.type, handle: m.handle, isDefault: m.isDefault }));
+    return res.json({ success: true, data: { user: { id: friend._id, name: friend.name, email: friend.email }, paymentMethods: methods } });
+  } catch (err) {
+    console.error('Get friend payment methods error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 

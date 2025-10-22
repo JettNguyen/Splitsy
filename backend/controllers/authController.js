@@ -2,7 +2,7 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 
-// Generate JWT Token
+// Generate a signed JWT for the given user id
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '30d',
@@ -57,7 +57,7 @@ const register = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Register error:', error);
+    console.error('Auth controller - register error:', error && (error.message || error));
     
     if (error.code === 11000) {
       return res.status(400).json({
@@ -128,7 +128,7 @@ const login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+  console.error('Auth controller - login error:', error && (error.message || error));
     res.status(500).json({
       success: false,
       message: 'Server error during login'
@@ -148,7 +148,7 @@ const getMe = async (req, res) => {
     res.json(user);
 
   } catch (error) {
-    console.error('GetMe error:', error);
+  console.error('Auth controller - getMe error:', error && (error.message || error));
     res.status(500).json({
       success: false,
       message: 'Server error getting user data'
@@ -191,7 +191,7 @@ const updateDetails = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Update details error:', error);
+  console.error('Auth controller - updateDetails error:', error && (error.message || error));
     res.status(500).json({
       success: false,
       message: 'Server error updating profile'
@@ -236,7 +236,7 @@ const updatePassword = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Update password error:', error);
+  console.error('Auth controller - updatePassword error:', error && (error.message || error));
     res.status(500).json({
       success: false,
       message: 'Server error updating password'
@@ -282,7 +282,7 @@ const addPaymentMethod = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Add payment method error:', error);
+  console.error('Auth controller - addPaymentMethod error:', error && (error.message || error));
     res.status(500).json({
       success: false,
       message: 'Server error adding payment method'
@@ -318,11 +318,25 @@ const removePaymentMethod = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Remove payment method error:', error);
+  console.error('Auth controller - removePaymentMethod error:', error && (error.message || error));
     res.status(500).json({
       success: false,
       message: 'Server error removing payment method'
     });
+  }
+};
+
+// @desc    Get current user's payment methods
+// @route   GET /api/auth/payment-methods
+// @access  Private
+const getPaymentMethods = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('paymentMethods');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    return res.json({ success: true, data: { paymentMethods: user.paymentMethods } });
+  } catch (error) {
+  console.error('Auth controller - getPaymentMethods error:', error && (error.message || error));
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -333,5 +347,6 @@ module.exports = {
   updateDetails,
   updatePassword,
   addPaymentMethod,
-  removePaymentMethod
+  removePaymentMethod,
+  getPaymentMethods
 };

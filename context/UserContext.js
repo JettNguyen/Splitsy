@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from '../services/apiService';
 
-//user context for managing authentication and user data
+// UserContext manages authentication state and current user profile
 const UserContext = createContext();
 
 export const useUser = () => {
@@ -19,11 +19,11 @@ export const UserProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  //load user data on app start
+  // Load user data when the app starts
   useEffect(() => {
     loadUserData();
     
-    //fail-safe timeout to prevent infinite loading
+      // Fail-safe: ensure we don't stay in loading state indefinitely
     const timeout = setTimeout(() => {
       if (isLoading) {
         // Loading timeout reached
@@ -38,14 +38,14 @@ export const UserProvider = ({ children }) => {
     try {
       setIsLoading(true);
       
-      //check for jwt token
+  // If there's a saved auth token, try to initialize the API client and fetch profile
       const token = await AsyncStorage.getItem('authToken');
       if (token) {
         try {
-          //initialize apiservice
+          // initialize api client with stored token
           await apiService.init();
           
-          //try to get user profile from api
+          // attempt to fetch the user's full profile from server
           const profile = await apiService.getUserProfile();
           if (profile.success) {
             setCurrentUser(profile.user);
@@ -55,11 +55,12 @@ export const UserProvider = ({ children }) => {
           }
         } 
         catch (error) {
-          // Clear invalid token and fall back to local storage
+          // If fetching profile fails, clear invalid token and continue with local storage
           await AsyncStorage.removeItem('authToken');
         }
       }
       
+      // Protect AsyncStorage reads with a short timeout to avoid hangs
       const timeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('AsyncStorage timeout')), 3000)
       );
@@ -88,10 +89,9 @@ export const UserProvider = ({ children }) => {
           setIsAuthenticated(true);
         }
       }
-    } 
-    catch (error) {
-      console.error('Error loading user data:', error);
-    } 
+    } catch (error) {
+      console.error('UserContext - loadUserData error:', error && (error.message || error));
+    }
     finally {
       setIsLoading(false);
     }
@@ -102,9 +102,8 @@ export const UserProvider = ({ children }) => {
       const validUsers = newUsers.filter(user => user && user.email && typeof user.email === 'string');
       await AsyncStorage.setItem('users', JSON.stringify(validUsers));
       setUsers(validUsers);
-    } 
-    catch (error) {
-      console.error('Error saving users:', error);
+    } catch (error) {
+      console.error('UserContext - saveUsers error:', error && (error.message || error));
     }
   };
 
@@ -116,11 +115,9 @@ export const UserProvider = ({ children }) => {
     try {
       await apiService.init();
       
-      const result = await apiService.register(userData.name, userData.email, userData.password);
-      console.log('Registration result:', result);
+  const result = await apiService.register(userData.name, userData.email, userData.password);
       
       if (result.success) {
-        console.log('Setting current user:', result.user);
         setCurrentUser(result.user);
         setIsAuthenticated(true);
         
@@ -134,9 +131,8 @@ export const UserProvider = ({ children }) => {
       }
       
       return result;
-    } 
-    catch (error) {
-      console.error('Error registering user:', error);
+    } catch (error) {
+      console.error('UserContext - registerUser error:', error && (error.message || error));
       return { success: false, error: error.message };
     }
   };
@@ -178,35 +174,16 @@ export const UserProvider = ({ children }) => {
       }
       
       return result;
-    } 
-    catch (error) {
-      console.error('Error logging in user:', error);
+    } catch (error) {
+      console.error('UserContext - loginUser error:', error && (error.message || error));
       return { success: false, error: error.message };
     }
   };
   
 
   const oldLoginUser = async (email, password) => {
-    try {
-      const user = users.find(u => u.email && email && u.email.toLowerCase() === email.toLowerCase());
-      if (!user) {
-        return { success: false, error: 'User not found' };
-      }
-
-      if (user.password !== password) {
-        return { success: false, error: 'Invalid password' };
-      }
-
-      await AsyncStorage.setItem('currentUserId', user.id);
-      setCurrentUser(user);
-      setIsAuthenticated(true);
-
-      return { success: true, user };
-    } 
-    catch (error) {
-      console.error('Error logging in:', error);
-      return { success: false, error: error.message };
-    }
+    // Legacy local-auth path removed. Use server backed `loginUser` instead.
+    return { success: false, error: 'Legacy login not supported' };
   };
 
   const logoutUser = async () => {
@@ -217,9 +194,8 @@ export const UserProvider = ({ children }) => {
       await AsyncStorage.removeItem('authToken');
       setCurrentUser(null);
       setIsAuthenticated(false);
-    } 
-    catch (error) {
-      console.error('Error logging out:', error);
+    } catch (error) {
+      console.error('UserContext - logoutUser error:', error && (error.message || error));
     }
   };
 
@@ -236,9 +212,8 @@ export const UserProvider = ({ children }) => {
       }
       
       return { success: true };
-    } 
-    catch (error) {
-      console.error('Error updating user:', error);
+    } catch (error) {
+      console.error('UserContext - updateUser error:', error && (error.message || error));
       return { success: false, error: error.message };
     }
   };

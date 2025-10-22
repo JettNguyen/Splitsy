@@ -15,6 +15,8 @@ router.get('/friends', protect, friendController.getFriends);
 // Remove friend (unfriend) - mutual removal
 router.delete('/friends/:friendId', protect, friendController.removeFriend);
 // Debug endpoint to inspect authenticated user and friends (dev only)
-router.get('/debug', protect, friendController.debugUser);
+// Get a friend's public payment methods
+// Get a friend's public payment methods
+router.get('/:friendId/payment-methods', protect, friendController.getFriendPaymentMethods);
 
 module.exports = router;

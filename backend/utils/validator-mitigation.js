@@ -40,7 +40,7 @@ try {
     if (validator.default && typeof validator.default.isURL === 'function') {
       validator.default.isURL = safeIsURL;
     }
-    console.log('validator.isURL has been patched with a safe WHATWG-based fallback');
+  // patched validator.isURL with safer fallback; no verbose log here
   }
 } catch (err) {
   // if validator isn't installed, nothing to do

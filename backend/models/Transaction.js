@@ -142,6 +142,17 @@ const transactionSchema = new mongoose.Schema({
     },
     comment: String
   }],
+  settlements: [{
+    initiator: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // who initiated the settlement action
+    target: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // target participant (recipient)
+    amount: { type: Number },
+    paymentMethod: {
+      id: { type: mongoose.Schema.Types.ObjectId },
+      type: { type: String },
+      handle: { type: String }
+    },
+    createdAt: { type: Date, default: Date.now }
+  }],
   settledAt: {
     type: Date
   },

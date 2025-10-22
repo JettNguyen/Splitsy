@@ -18,6 +18,7 @@ import ExpenseReportsScreen from './screens/ExpenseReportsScreen';
 import ExpenseForm from './components/ExpenseForm';
 import FriendsScreen from './screens/FriendsScreen';
 import ActivityScreen from './screens/ActivityScreen';
+import apiService from './services/apiService';
 
 // External libraries
 import { Ionicons } from '@expo/vector-icons';
@@ -391,15 +392,18 @@ function MainApp() {
       await createTransaction(payload);
       await getUserTransactions();
       // Refresh server-side computed balances and update the context
-      await fetchUserBalances();
-      const txResp = await loadTransactions(groupId);
-      setGroupTransactions(txResp || []);
-      const balances = await getGroupBalances(groupId);
-      setGroupBalances(balances || []);
+      if(expenseData.groupId) {
+        await fetchUserBalances();
+        const txResp = await apiService.getTransactions(expenseData.groupId);
+        //setGroupTransactions(txResp || []); this does not even exist, only works when commented out
+        const balances = await apiService.getGroupBalances(expenseData.groupId);
+        //setGroupBalances(balances || []); this does not exist either, only works when commented out
+      }
 
   hideAddExpenseModal();
       Alert.alert('Success', 'Expense added successfully');
     } catch (error) {
+      console.log('ADD Expense Error:', error);
       Alert.alert('Error', 'Failed to add expense');
     }
   };

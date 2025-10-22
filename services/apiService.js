@@ -318,7 +318,7 @@ class ApiService {
 
   // Transaction methods
   async getTransactions(groupId, page = 1, limit = 20) {
-    return await this.makeRequest(`/transactions/group/${groupId}?page=${page}&limit=${limit}`);
+    return await this.makeRequest(`/transactions/group/${groupId}?page=${page}&limit=${limit}=`);
   }
 
  async createTransaction(transactionData) {

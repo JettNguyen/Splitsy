@@ -119,7 +119,6 @@ useEffect(() => {
     if (!formData.amount || isNaN(parseFloat(formData.amount)) || parseFloat(formData.amount) <= 0) {
       return 'Please enter a valid amount';
     }
-    if (!formData.groupId) return 'Please select a group';
     if (formData.participants.length === 0) return 'Please select at least one participant';
     return null;
   };

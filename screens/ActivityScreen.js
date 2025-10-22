@@ -26,7 +26,7 @@ const ActivityScreen = () => {
   const [userTransactions, setUserTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load the user's transactions (includes friend transactions)
+  // load the user's transactions (includes friend transactions)
   useEffect(() => {
     const loadUserTransactions = async () => {
       if (!currentUser) return;
@@ -52,10 +52,11 @@ const ActivityScreen = () => {
     loadUserTransactions();
   }, [currentUser]);
 
-  // Fetch balances once when the component mounts
+  // fetch balances when current user becomes available
   useEffect(() => {
+    if (!currentUser) return;
     fetchUserBalances();
-  }, []);
+  }, [currentUser]);
 
   const getFilteredActivity = () => {
     let activities = [...(userTransactions || [])];
@@ -92,7 +93,7 @@ const ActivityScreen = () => {
   const getActivityIcon = (transaction) => {
     if (transaction.type === 'settlement') return 'card';
     
-    // Calculate if user lent money (arrow up) or borrowed money (arrow down)
+  // calculate whether the user lent (arrow up) or borrowed (arrow down)
     const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
     const userParticipant = transaction.participants?.find(p => 
       p.user === currentUser?.id || p.user?._id === currentUser?.id
@@ -101,14 +102,14 @@ const ActivityScreen = () => {
     const userPaidAmount = userWasPayer ? transaction.amount : 0;
     const netAmount = userPaidAmount - userOwedAmount;
     
-    // Arrow up for lending money, arrow down for borrowing money
+  // arrow up = lent, arrow down = borrowed
     return netAmount > 0 ? 'arrow-up' : 'arrow-down';
   };
 
   const getActivityColor = (transaction) => {
     if (transaction.type === 'settlement') return theme.colors.accent;
     
-    // Calculate if user lent money (positive) or borrowed money (negative)
+  // calculate if the user lent money (positive) or borrowed money (negative)
     const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
     const userParticipant = transaction.participants?.find(p => 
       p.user === currentUser?.id || p.user?._id === currentUser?.id
@@ -117,7 +118,7 @@ const ActivityScreen = () => {
     const userPaidAmount = userWasPayer ? transaction.amount : 0;
     const netAmount = userPaidAmount - userOwedAmount;
     
-    // Green for lending money (positive), red for borrowing money (negative)
+  // green = lending (positive), red = borrowing (negative)
     return netAmount > 0 ? theme.colors.success : theme.colors.error;
   };
 
@@ -128,21 +129,21 @@ const ActivityScreen = () => {
       return `Settlement in ${groupName}`;
     }
     
-    // Determine if the current user was the payer
+  // determine whether the current user was the payer
     const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
     
-    // Calculate what the user owes vs what they paid
+  // calculate what the user owes vs what they paid
     const userParticipant = transaction.participants?.find(p => 
       p.user === currentUser?.id || p.user?._id === currentUser?.id
     );
     const userOwedAmount = userParticipant?.amount || 0;
     const userPaidAmount = userWasPayer ? transaction.amount : 0;
     
-    // Determine if user lent money (paid more than they owe) or borrowed money (paid less than they owe)
+  // determine if user lent (paid more than they owe) or borrowed (paid less than they owe)
     const isLending = userPaidAmount > userOwedAmount;
     const isBorrowing = userPaidAmount < userOwedAmount;
     
-    // Find the other person's name for friend transactions
+  // find the other person's name for one-on-one transactions
     let otherPersonName = '';
     if (!transaction.group) {
       if (userWasPayer) {
@@ -157,7 +158,7 @@ const ActivityScreen = () => {
       }
     }
     
-  // Build a friendly description text for each activity item
+  // build a friendly description for each activity item
     const itemName = transaction.description;
     const groupName = transaction.group ? 
       (userGroups?.find(g => g.id === transaction.group)?.name || 'Unknown Group') : 
@@ -201,7 +202,7 @@ const ActivityScreen = () => {
   );
 
   const ActivityItem = ({ transaction }) => {
-    // Calculate user's financial position for this transaction
+  // calculate user's financial position for this transaction
     const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
     const userParticipant = transaction.participants?.find(p => 
       p.user === currentUser?.id || p.user?._id === currentUser?.id
@@ -209,20 +210,21 @@ const ActivityScreen = () => {
     const userOwedAmount = userParticipant?.amount || 0;
     const userPaidAmount = userWasPayer ? transaction.amount : 0;
     
-    // Net amount: positive means user lent money, negative means user borrowed money
-    const netAmount = userPaidAmount - userOwedAmount;
-    const isPositive = netAmount > 0;
+   // calculate net amount and ensure numeric coercion
+   const netAmount = Number(userPaidAmount) - Number(userOwedAmount);
+   const sign = netAmount >= 0 ? '+' : '-';
+   const formattedAmount = `${sign}${Math.abs(netAmount).toFixed(2)}`;
     
+    const isSettled = !!(transaction.settled || transaction.settlements?.length || transaction.status === 'settled' || transaction.isPaid);
+
     return (
-      <View style={[styles.activityItem, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-        <View style={[styles.activityIcon, { backgroundColor: getActivityColor(transaction) }]}>
-          <Ionicons 
-            name={getActivityIcon(transaction)} 
-            size={18} 
-            color="white"
-          />
+      <View style={[styles.activityItem, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}> 
+        {/* left icon */}
+        <View style={[styles.activityIcon, { backgroundColor: getActivityColor(transaction) }]}> 
+          <Ionicons name={getActivityIcon(transaction)} size={18} color="white" />
         </View>
-        
+
+        {/* center content */}
         <View style={styles.activityContent}>
           <Text style={[styles.activityDescription, { color: theme.colors.text }]}>
             {getActivityDescription(transaction)}
@@ -231,16 +233,17 @@ const ActivityScreen = () => {
             {formatDate(transaction.date || transaction.createdAt)}
           </Text>
         </View>
-        
-        <View style={styles.activityAmount}>
+
+        {/* right amount + status */}
+        <View style={styles.activityAmount}> 
           <Text style={[
             styles.amountText, 
-            { 
-              color: isPositive ? theme.colors.success : theme.colors.error 
-            }
+            { color: Number(netAmount) > 0 ? theme.colors.success : theme.colors.error }
           ]}>
-            {isPositive ? '+' : ''}${Math.abs(netAmount).toFixed(2)}
+           {formattedAmount}
           </Text>
+          {/* color-coded status circle matching home page */}
+          <View style={[AppStyles.statusCircle, { backgroundColor: isSettled ? '#4CAF50' : '#FF9800', marginTop: 6 }]} />
         </View>
       </View>
     );
@@ -345,6 +348,32 @@ const ActivityScreen = () => {
       },
       activityContainer: {
         paddingHorizontal: 25,
+      },
+      activityItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        marginBottom: 12,
+        borderRadius: 12,
+        borderWidth: 0.5,
+        shadowColor: '#673e9dff',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 3,
+      },
+      activityIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+      },
+      activityAmount: {
+        width: 110,
+        alignItems: 'center',
+        justifyContent: 'center',
       },
       activityContent: {
         flex: 1,

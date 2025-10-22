@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 
-//theme context for light/dark modes
+// theme context for light/dark modes
 const ThemeContext = createContext();
 
 export const useTheme = () => {
@@ -13,7 +13,7 @@ export const useTheme = () => {
   return context;
 };
 
-//light theme colors
+// light theme colors
 const lightTheme = {
   mode: 'light',
   colors: {
@@ -38,7 +38,7 @@ const lightTheme = {
   statusBar: 'dark',
 };
 
-//dark theme colors
+// dark theme colors
 const darkTheme = {
   mode: 'dark',
   colors: {
@@ -68,7 +68,7 @@ const darkTheme = {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(true); //default to dark mode
+  const [isDarkMode, setIsDarkMode] = useState(true); // default to dark mode
   const [isLoading, setIsLoading] = useState(true);
 
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -84,7 +84,7 @@ export const ThemeProvider = ({ children }) => {
         setIsDarkMode(savedTheme === 'dark');
       } 
       else {
-        //if no saved preference, default to dark mode
+        // if no saved preference, default to dark mode
         setIsDarkMode(true);
         await AsyncStorage.setItem('theme', 'dark');
       }

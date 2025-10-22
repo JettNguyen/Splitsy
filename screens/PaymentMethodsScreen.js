@@ -148,7 +148,7 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
       processedHandle = processedHandle.substring(1);
     }
 
-    // Call backend to persist
+    // call backend to persist
     (async () => {
       try {
         const resp = await apiService.addPaymentMethod({ type: newMethod.type, handle: processedHandle });
@@ -201,7 +201,7 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
     );
   };
 
-  // Load payment methods from server when modal opens
+  // load payment methods from the server when the modal opens
   useEffect(() => {
     if (!visible) return;
     let mounted = true;
@@ -265,12 +265,12 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
         >
           <View style={[styles.backgroundExtension, { backgroundColor: theme.colors.background }]} />
           <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            {/*drag indicator*/}
+            {/* drag indicator */}
             <View style={styles.dragIndicatorContainer} {...panResponder.panHandlers}>
               <View style={[styles.dragIndicator, { backgroundColor: theme.colors.textTertiary }]} />
             </View>
           
-          {/*header*/}
+          {/* header */}
           <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary, opacity: 0.7 }]}>Cancel</Text>
@@ -321,7 +321,7 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
             )}
           </ScrollView>
 
-          {/*add payment method form*/}
+          {/* add payment method form */}
           {showAddModal && getAvailablePaymentTypes().length > 0 && (
             <View style={[styles.addForm, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
               <View style={styles.addFormHeader}>
@@ -389,7 +389,7 @@ const PaymentMethodsScreen = ({ visible, onClose }) => {
             </View>
           )}
           
-          {/*done button*/}
+          {/* done button */}
           {!showAddModal && !keyboardVisible && (
             <View style={[styles.doneButtonContainer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
               <TouchableOpacity 

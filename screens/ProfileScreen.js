@@ -14,12 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
 
-//context imports
+// context imports
 import { useUser } from '../context/UserContext';
 import { useData } from '../context/ApiDataContext';
 import { useTheme } from '../context/ThemeContext';
 
-//profile and settings screen component
+// profile and settings screen component
 const ProfileScreen = ({ 
   onNavigateToPaymentMethods,
   onNavigateToNotifications,
@@ -27,7 +27,7 @@ const ProfileScreen = ({
   onNavigateToGroupManagement 
 }) => {
   const { currentUser, logoutUser, updateUser } = useUser();
-  const { calculateUserBalance } = useData();
+  const { calculateUserBalance, userBalances } = useData();
   const { theme, isDarkMode, toggleTheme } = useTheme();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -36,7 +36,13 @@ const ProfileScreen = ({
     phone: currentUser?.phone || ''
   });
 
-  const balanceData = calculateUserBalance() || { owed: 0, owes: 0, net: 0 };
+  // prefer server-provided balances when available; otherwise fall back to local calculation
+  const serverSummary = userBalances && userBalances.summary ? userBalances.summary : null;
+  const balanceData = serverSummary ? {
+    owed: serverSummary.totalOwedToMe || 0,
+    owes: serverSummary.totalIOwe || 0,
+    net: serverSummary.netBalance || 0
+  } : (calculateUserBalance() || { owed: 0, owes: 0, net: 0 });
   const balance = balanceData.net || 0;
 
   const handleLogout = () => {
@@ -101,7 +107,7 @@ const ProfileScreen = ({
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right', 'bottom']}> 
       <ScrollView style={[styles.scrollContainer, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.scrollContent}>
-        {/*profile header*/}
+        {/* profile header */}
         <View style={[styles.profileHeader, { backgroundColor: theme.colors.card }]}>
           <View style={[styles.avatarContainer, { backgroundColor: theme.colors.primary }]}>
             <Text style={styles.avatarText}>{currentUser?.avatar || currentUser?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
@@ -109,24 +115,21 @@ const ProfileScreen = ({
           <Text style={[styles.userName, { color: theme.colors.text }]}>{currentUser?.name}</Text>
           <Text style={[styles.userEmail, { color: theme.colors.textSecondary }]}>{currentUser?.email}</Text>
           
-          {/*balance summary */}
+          {/* balance summary: show net balance only (server-preferred when available) */}
           <View style={[styles.balanceContainer, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.balanceItem}>
-              <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>Total Balance</Text>
+              <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>Net balance</Text>
               <Text style={[
                 styles.balanceAmount,
                 { color: balance >= 0 ? theme.colors.success : theme.colors.error }
               ]}>
                 ${Math.abs(balance).toFixed(2)}
               </Text>
-              <Text style={[styles.balanceStatus, { color: theme.colors.textTertiary }]}>
-                {balance >= 0 ? 'You are owed' : 'You owe'}
-              </Text>
             </View>
           </View>
         </View>
 
-        {/*account section*/}
+        {/* account section */}
         <MenuSection title="Account">
           <MenuItem
             icon="person-circle-outline"
@@ -169,7 +172,7 @@ const ProfileScreen = ({
           />
         </MenuSection>
 
-        {/*groups section*/}
+        {/* groups section */}
         <MenuSection title="Groups">
           <MenuItem
             icon="people-outline"
@@ -191,14 +194,14 @@ const ProfileScreen = ({
           />
         </MenuSection>
 
-        {/*sign out*/}
+        {/* sign out */}
         <View style={styles.signOutContainer}>
           <TouchableOpacity style={[styles.signOutButton, { backgroundColor: theme.colors.error }]} onPress={handleLogout}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
   </ScrollView>
-      {/*edit profile modal*/}
+      {/* edit profile modal */}
       <Modal
         visible={showEditModal}
         animationType="slide"
@@ -330,6 +333,26 @@ const styles = StyleSheet.create({
   },
   balanceItem: {
     alignItems: 'center',
+  },
+  balanceBreakdownRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  breakdownItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  breakdownLabel: {
+    fontSize: 12,
+    fontFamily: FONT_FAMILY,
+  },
+  breakdownValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 2,
+    fontFamily: FONT_FAMILY_BOLD,
   },
   balanceLabel: {
     fontSize: 14,

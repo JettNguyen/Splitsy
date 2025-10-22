@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
 
-//services and context
+// services and context
 import apiService from '../services/apiService';
 import { useUser } from './UserContext';
 
-//data context for managing groups and transactions
+// data context: manages groups, transactions, and related api calls
 const DataContext = createContext();
 
 
@@ -20,6 +20,9 @@ export const useData = () => {
 
 export const DataProvider = ({ children }) => {
   const { currentUser } = useUser();
+  const fetchingGroupsRef = React.useRef(false);
+  const fetchingBalancesRef = React.useRef(false);
+  const lastBalancesFetchRef = React.useRef(0);
   const [groups, setGroups] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,9 +35,8 @@ export const DataProvider = ({ children }) => {
   useEffect(() => {
     if (currentUser) {
       initializeData();
-    } 
-    else {
-      //if no user is authenticated, reset state
+    } else {
+      // no authenticated user: reset local caches
       setGroups([]);
       setTransactions([]);
       setIsLoading(false);
@@ -47,11 +49,11 @@ export const DataProvider = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
-      //initialize api service
+  // initialize api service and load token
       await apiService.init();
 
-      // If there's no auth token after init, don't call protected endpoints.
-      // This avoids noisy 401 logs when the app has a local cached user but no valid token.
+      // if no auth token after init, skip protected endpoints
+      // avoids noisy 401 logs when a cached user has no valid token
       if (!apiService.token) {
         console.warn('ApiDataContext: no auth token available; skipping protected data load');
         setGroups([]);
@@ -59,9 +61,9 @@ export const DataProvider = ({ children }) => {
         return;
       }
 
-      //load user's groups
-      await loadGroups();
-      await fetchUserBalances();
+  // load user's groups and balances (avoid duplicate concurrent calls)
+  await loadGroups();
+  await fetchUserBalances();
 
     } 
     catch (error) {
@@ -74,13 +76,15 @@ export const DataProvider = ({ children }) => {
   };
 
   const loadGroups = async () => {
+    if (fetchingGroupsRef.current) return;
+    fetchingGroupsRef.current = true;
     try {
       const response = await apiService.getGroups();
 
-      // Acceptable shapes from backend:
-      // - array of groups
-      // - { success: true, data: { groups: [...] } }
-      // - a single group object
+    // acceptable response shapes from backend:
+    // - array of groups
+    // - { success: true, data: { groups: [...] } }
+    // - a single group object
       if (Array.isArray(response)) {
         setGroups(response);
       } else if (response && response.success && response.data && Array.isArray(response.data.groups)) {
@@ -97,12 +101,15 @@ export const DataProvider = ({ children }) => {
       setGroups([]);
       handleApiError(error);
     }
+    finally {
+      fetchingGroupsRef.current = false;
+    }
   };
 
   const loadTransactions = async (groupId) => {
     try {
       const response = await apiService.getTransactions(groupId);
-      // Backend may return different shapes:
+      // backend may return different shapes for transactions:
       // - { success: true, data: [tx, ...] }
       // - { success: true, data: { transactions: [...] } }
       // - directly an array
@@ -124,13 +131,13 @@ export const DataProvider = ({ children }) => {
   const handleApiError = (error) => {
     if (error.message.includes('Authentication failed')) {
       Alert.alert(
-        'Session Expired',
-        'Please log in again to continue.',
-        [{ text: 'OK', onPress: () => {/* Navigate to login */ } }]
+        'session expired',
+        'please log in again to continue.',
+        [{ text: 'ok', onPress: () => {/* navigate to login */ } }]
       );
     } 
     else if (error.message.includes('Cannot connect')) {
-      setError('Cannot connect to server. Please check your internet connection.');
+      setError('cannot connect to server. please check your internet connection.');
     } 
     else {
       setError(error.message);
@@ -138,7 +145,7 @@ export const DataProvider = ({ children }) => {
   };
 
   const createGroup = async (groupData) => {
-    // Create a new group on the backend, then append it to local state.
+    // create a new group on the backend and append it to local state
     try {
       setError(null);
       const response = await apiService.createGroup(groupData);
@@ -271,7 +278,7 @@ export const DataProvider = ({ children }) => {
   };
 
   const createTransaction = async (transactionData) => {
-    // Send a new transaction to the backend and update local cache.
+  // send a new transaction to the backend and update local cache
     try {
       setError(null);
       const response = await apiService.createTransaction(transactionData);
@@ -338,7 +345,7 @@ export const DataProvider = ({ children }) => {
   };
 
   const markTransactionPaid = async (transactionId, userId, paid = true) => {
-    // Mark a participant as paid in a transaction; update the local transactions list.
+    // mark a participant as paid in a transaction and update local cache
     try {
       setError(null);
       const response = await apiService.markTransactionPaid(transactionId, userId, paid);
@@ -382,7 +389,7 @@ export const DataProvider = ({ children }) => {
   };
 
   const getUserTransactions = () => {
-    // Return transactions where the current user is the payer or a participant
+    // return transactions where the current user is the payer or a participant
     if (!currentUser) return [];
     return transactions.filter(transaction =>
       (transaction.payer && (transaction.payer._id || transaction.payer) === (currentUser.id || currentUser._id)) ||
@@ -393,7 +400,7 @@ export const DataProvider = ({ children }) => {
     if (!currentUser || !Array.isArray(transactions)) {
       return { owed: 0, owes: 0, net: 0 };
     }
-    // Compute what others owe the user (owed) and what the user owes (owes)
+  // compute what others owe the user (owed) and what the user owes (owes)
     let totalOwed = 0;
     let totalOwing = 0;
     
@@ -403,33 +410,40 @@ export const DataProvider = ({ children }) => {
           return;
         }
         
-        const currentUserId = currentUser.id || currentUser._id;
-        const payerId = transaction.payer?._id || transaction.payer?.id || transaction.payer;
-        // If the current user is the payer, others owe their share; otherwise, the user owes their participant amount
-        // Check if current user is the payer
+  const currentUserId = currentUser.id || currentUser._id;
+  const payerId = transaction.payer?._id || transaction.payer?.id || transaction.payer;
+        // if the current user is the payer, others owe their share; otherwise, the user owes their participant amount
+        // check if current user is the payer
         if (payerId === currentUserId) {
-          // User paid the full amount
+          // user paid the full amount
           const userParticipant = transaction.participants.find(p => {
-            const participantId = p.user?._id || p.user?.id || p.user;
-            return participantId === currentUserId;
+            const participantId = p && (p.user?._id || p.user?.id || p.user || p._id || p.id);
+            return String(participantId) === String(currentUserId);
           });
-          
-            if (userParticipant) {
-              // User paid the full amount but also owes their share
-              // So others owe: (total amount - user's share)
-              const othersOwe = transaction.amount - userParticipant.amount;
-              totalOwed += othersOwe;
-            }
+
+          if (userParticipant) {
+            // participant.amount may be missing for older transactions; fallback to equal split
+            const participantAmount = (userParticipant && typeof userParticipant.amount === 'number')
+              ? userParticipant.amount
+              : (transaction.participants.length ? (transaction.amount / transaction.participants.length) : 0);
+
+            // others owe: total amount - user's share
+            const othersOwe = Number(transaction.amount) - Number(participantAmount || 0);
+            totalOwed += Math.max(0, othersOwe);
+          }
         } else {
-          // User is a participant, check how much they owe
+          // user is a participant, check how much they owe
           const userParticipant = transaction.participants.find(p => {
-            const participantId = p.user?._id || p.user?.id || p.user;
-            return participantId === currentUserId;
+            const participantId = p && (p.user?._id || p.user?.id || p.user || p._id || p.id);
+            return String(participantId) === String(currentUserId);
           });
-          
-            if (userParticipant) {
-              totalOwing += userParticipant.amount;
-            }
+
+          if (userParticipant) {
+            const participantAmount = (typeof userParticipant.amount === 'number')
+              ? userParticipant.amount
+              : (transaction.participants.length ? (transaction.amount / transaction.participants.length) : 0);
+            totalOwing += Number(participantAmount || 0);
+          }
         }
       });
     } 
@@ -444,13 +458,18 @@ export const DataProvider = ({ children }) => {
       net: totalOwed - totalOwing
     };
     
-    // Result holds the totals: owed (others owe user), owes (user owes), net (owed - owes)
+  // result holds the totals: owed (others owe user), owes (user owes), net (owed - owes)
     
     return result;
   }, [currentUser, transactions]);
 
 const fetchUserBalances = async () => {
   if (!currentUser) return;
+  if (fetchingBalancesRef.current) return;
+  // avoid repeated fetches within a short window (10s)
+  const now = Date.now();
+  if (now - (lastBalancesFetchRef.current || 0) < 10000) return;
+  fetchingBalancesRef.current = true;
 
   try {
     const response = await apiService.getUserBalances();
@@ -464,6 +483,9 @@ const fetchUserBalances = async () => {
   } catch (error) {
     console.error('Error fetching user balances:', error.message);
     setUserBalances(null);
+  } finally {
+    fetchingBalancesRef.current = false;
+    lastBalancesFetchRef.current = Date.now();
   }
 };
 

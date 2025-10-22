@@ -103,16 +103,16 @@ groupSchema.virtual('isBalanced').get(function() {
   return (this.totalExpenses || 0) === (this.settledExpenses || 0);
 });
 
-// Index for better query performance
+// index for better query performance
 groupSchema.index({ creator: 1 });
 groupSchema.index({ 'members.user': 1 });
 groupSchema.index({ isActive: 1 });
 groupSchema.index({ lastActivity: -1 });
 
-// Pre-save middleware to set creator as admin
+// pre-save middleware to set creator as admin
 groupSchema.pre('save', function(next) {
   if (this.isNew) {
-    // Ensure creator is in members array as admin
+    // ensure creator is in members array as admin
     const creatorInMembers = this.members.find(
       member => member.user.toString() === this.creator.toString()
     );
@@ -124,17 +124,17 @@ groupSchema.pre('save', function(next) {
         joinedAt: new Date()
       });
     } else {
-      // Ensure creator has admin role
+      // ensure creator has admin role
       creatorInMembers.role = 'admin';
     }
   }
   
-  // Update last activity
+  // update last activity
   this.lastActivity = new Date();
   next();
 });
 
-// Method to add member
+// method to add member
 groupSchema.methods.addMember = function(userId, role = 'member') {
   const existingMember = this.members.find(
     member => member.user.toString() === userId.toString()
@@ -153,7 +153,7 @@ groupSchema.methods.addMember = function(userId, role = 'member') {
   return this.save();
 };
 
-// Method to remove member
+// method to remove member
 groupSchema.methods.removeMember = function(userId) {
   const memberIndex = this.members.findIndex(
     member => member.user.toString() === userId.toString()
@@ -163,7 +163,7 @@ groupSchema.methods.removeMember = function(userId) {
     throw new Error('User is not a member of this group');
   }
   
-  // Don't allow removing the creator
+  // don't allow removing the creator
   if (this.members[memberIndex].user.toString() === this.creator.toString()) {
     throw new Error('Cannot remove group creator');
   }
@@ -172,26 +172,26 @@ groupSchema.methods.removeMember = function(userId) {
   return this.save();
 };
 
-// Method to check if user is member
+// method to check if user is member
 groupSchema.methods.isMember = function(userId) {
   return this.members.some(member => {
-    // Handle both populated and non-populated cases
+    // handle both populated and non-populated cases
     const memberUserId = member.user._id || member.user;
     return memberUserId.toString() === userId.toString();
   });
 };
 
-// Method to check if user is admin
+// method to check if user is admin
 groupSchema.methods.isAdmin = function(userId) {
   const member = this.members.find(member => {
-    // Handle both populated and non-populated cases
+    // handle both populated and non-populated cases
     const memberUserId = member.user._id || member.user;
     return memberUserId.toString() === userId.toString();
   });
   return member && member.role === 'admin';
 };
 
-// Method to update financial totals
+// method to update financial totals
 groupSchema.methods.updateTotals = async function() {
   const Transaction = mongoose.model('Transaction');
   

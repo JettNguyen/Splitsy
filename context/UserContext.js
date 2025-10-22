@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from '../services/apiService';
 
-// UserContext manages authentication state and current user profile
+// user context: manages authentication state and current user profile
 const UserContext = createContext();
 
 export const useUser = () => {
@@ -19,17 +19,17 @@ export const UserProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load user data when the app starts
+  // load user data on app start
   useEffect(() => {
     loadUserData();
     
-      // Fail-safe: ensure we don't stay in loading state indefinitely
+  // fail-safe: ensure we don't stay in loading state indefinitely
     const timeout = setTimeout(() => {
       if (isLoading) {
-        // Loading timeout reached
+        // loading timeout reached
         setIsLoading(false);
       }
-    }, 5000); //5 second timeout
+    }, 5000); // 5 second timeout
 
     return () => clearTimeout(timeout);
   }, []);
@@ -38,14 +38,14 @@ export const UserProvider = ({ children }) => {
     try {
       setIsLoading(true);
       
-  // If there's a saved auth token, try to initialize the API client and fetch profile
+  // if there's a saved auth token, try to initialize the api client and fetch profile
       const token = await AsyncStorage.getItem('authToken');
       if (token) {
         try {
           // initialize api client with stored token
           await apiService.init();
           
-          // attempt to fetch the user's full profile from server
+          // attempt to fetch the user's full profile from the server
           const profile = await apiService.getUserProfile();
           if (profile.success) {
             setCurrentUser(profile.user);
@@ -55,12 +55,12 @@ export const UserProvider = ({ children }) => {
           }
         } 
         catch (error) {
-          // If fetching profile fails, clear invalid token and continue with local storage
+          // if fetching profile fails, clear invalid token and continue with local storage
           await AsyncStorage.removeItem('authToken');
         }
       }
       
-      // Protect AsyncStorage reads with a short timeout to avoid hangs
+  // protect AsyncStorage reads with a short timeout to avoid hangs
       const timeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('AsyncStorage timeout')), 3000)
       );
@@ -182,8 +182,8 @@ export const UserProvider = ({ children }) => {
   
 
   const oldLoginUser = async (email, password) => {
-    // Legacy local-auth path removed. Use server backed `loginUser` instead.
-    return { success: false, error: 'Legacy login not supported' };
+    // legacy local-auth path removed; use server-backed login instead
+    return { success: false, error: 'legacy login not supported' };
   };
 
   const logoutUser = async () => {

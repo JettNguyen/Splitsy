@@ -102,8 +102,8 @@ const SettlementScreen = ({ visible, onClose }) => {
               text: 'Settle',
               onPress: async () => {
                 try {
-                  // Mark each transaction as paid for the current participant.
-                  // Backend will mark participant.paid and update transaction status.
+                  // mark each transaction as paid for the current participant
+                  // backend will mark participant.paid and update transaction status
                   for (const transaction of selectedSettlement.transactions) {
                     await markTransactionPaid(transaction.id, currentUser.id, true);
                   }
@@ -120,10 +120,13 @@ const SettlementScreen = ({ visible, onClose }) => {
     );
   };
 
+  // open a payment app or fallback to a web url
   const openPaymentApp = (app, amount, recipientName) => {
+  // build simple deep links or web fallbacks
+    const name = String(recipientName || '').replace(/\s+/g, '');
     const urls = {
-      venmo: `venmo://paycharge?txn=pay&recipients=${recipientName.replace(' ', '')}&amount=${amount}&note=Splitsy%20Settlement`,
-      paypal: `https://paypal.me/${recipientName.replace(' ', '').toLowerCase()}/${amount}`,
+      venmo: `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(name)}&amount=${amount}&note=splitsy%20settlement`,
+      paypal: `https://paypal.me/${encodeURIComponent(name)}/${amount}`,
       zelle: 'https://www.zellepay.com/',
     };
 
@@ -131,7 +134,7 @@ const SettlementScreen = ({ visible, onClose }) => {
     if (url) {
       import('react-native').then(({ Linking }) => {
         Linking.openURL(url).catch(() => {
-          Alert.alert('App not found', `Please install ${app} or use the web version`);
+          Alert.alert('App not found', `please install ${app} or use the web version`);
         });
       });
     }
@@ -210,7 +213,7 @@ const SettlementScreen = ({ visible, onClose }) => {
         </TouchableOpacity>
       </View>
 
-      {/*transaction details*/}
+      {/* transaction details */}
       <View style={styles.transactionDetails}>
         <Text style={styles.transactionDetailsTitle}>Transactions:</Text>
         {settlement.transactions.slice(0, 3).map((transaction, index) => (
@@ -284,7 +287,7 @@ const SettlementScreen = ({ visible, onClose }) => {
           )}
         </ScrollView>
 
-        {/*settlement confirmation modal*/}
+        {/* settlement confirmation modal */}
         <Modal
           visible={!!selectedSettlement}
           transparent={true}

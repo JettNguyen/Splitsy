@@ -1,14 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
-//api service for handling backend communication
-//backend server url (using the correct ip and port)
-const { IP_ADDRESS, PORT, PROD_API_URL } = Constants.expoConfig.extra;
+// api service for communicating with the backend
+// backend server url (uses expo extras in development)
+const { IP_ADDRESS, PORT, PROD_API_URL } = (Constants.expoConfig && Constants.expoConfig.extra) || {};
+const devIp = IP_ADDRESS || 'localhost';
+const devPort = PORT || '3000';
 export const API_BASE_URL = __DEV__
-  ? `http://${IP_ADDRESS}:${PORT}/api`
+  ? `http://${devIp}:${devPort}/api`
   : PROD_API_URL;
 
-// Note: API_BASE_URL is configured from Expo constants in development.
+// note: api_base_url is configured from expo constants in development.
 
 class ApiService {
   constructor() {
@@ -16,11 +18,10 @@ class ApiService {
     this.token = null;
   }
 
-  //initialize the service and load stored token
+  // initialize the service and load stored token
   async init() {
-  try {
-      // If token is already set in-memory (e.g. just after login), prefer that to avoid
-      // a race where AsyncStorage hasn't been written yet.
+    try {
+      // prefer in-memory token when present to avoid races with async storage writes
       if (this.token) return;
 
       const token = await AsyncStorage.getItem('authToken');
@@ -30,7 +31,7 @@ class ApiService {
     }
   }
 
-  //set authentication token
+  // set authentication token
   async setAuthToken(token) {
     this.token = token;
     try {
@@ -41,7 +42,7 @@ class ApiService {
     }
   }
 
-  //get authentication headers
+  // get authentication headers
   getAuthHeaders() {
     const headers = {
       'Content-Type': 'application/json',
@@ -54,13 +55,13 @@ class ApiService {
     return headers;
   }
 
-  //generic api call method
+  // generic api call method
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    // Debug: show whether a token is present at call time (redacted)
-    // Intentionally avoid noisy debug logs here; errors are logged below when they occur.
+  // debug: whether a token is present at call time (redacted)
+  // avoid noisy debug logs here; errors are handled below
     
-    // Merge headers so callers can pass additional headers without removing Authorization
+  // merge headers so callers can pass extra headers without removing authorization
     const mergedHeaders = { ...this.getAuthHeaders(), ...(options.headers || {}) };
     const config = {
       method: options.method || 'GET',
@@ -68,13 +69,13 @@ class ApiService {
       headers: mergedHeaders,
     };
 
-    // Convert body to JSON if it exists
+  // convert body to json if it exists
     if (config.body && typeof config.body === 'object') {
       config.body = JSON.stringify(config.body);
     }
 
     try {
-      // Add timeout wrapper to prevent hanging requests
+  // add a timeout wrapper to prevent hanging requests
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Request timed out')), 15000)
       );
@@ -84,7 +85,7 @@ class ApiService {
         timeoutPromise
       ]);
       
-      // Handle different response types
+  // handle different response types
       const contentType = response.headers.get('content-type');
       let data;
       
@@ -94,13 +95,13 @@ class ApiService {
         data = await response.text();
       }
 
-  // Treat non-2xx responses as errors and provide friendly messages
-      if (!response.ok) {
-        // Prefer server-provided message when available
+  // treat non-2xx responses as errors and provide friendly messages
+    if (!response.ok) {
+  // prefer server-provided message when available
         const serverMessage = (data && data.message) ? data.message : null;
-        // Handle different HTTP error codes
+        // handle different http error codes
         if (response.status === 401) {
-          // Token expired or invalid
+    // token expired or invalid
           this.setAuthToken(null);
           throw new Error(serverMessage || 'Authentication failed. Please log in again.');
         } else if (response.status === 403) {
@@ -114,10 +115,10 @@ class ApiService {
         }
       }
 
-      // Parsed response (JSON or text)
+  // parsed response (json or text)
       return data;
     } catch (error) {
-      // Log a concise message and include context only in development
+  // log a concise message; include extra debug info only in development
       console.error(`API Error [${config.method} ${url}]:`, error.message);
       if ((process.env.NODE_ENV || 'development') === 'development') {
         console.debug && console.debug('Request debug:', {
@@ -129,17 +130,17 @@ class ApiService {
       }
       
       if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
-        throw new Error('Cannot connect to server. Please check your internet connection.');
+        throw new Error('cannot connect to server. please check your internet connection.');
       }
       if (error.message.includes('timed out') || error.message.includes('Request timed out')) {
-        throw new Error('Network request timed out');
+        throw new Error('network request timed out');
       }
-      // Re-throw the error for callers to handle (DataContext shows alerts)
+      // re-throw for callers (contexts will show alerts)
       throw error;
     }
   }
 
-  // Authentication methods
+  // authentication methods
   async register(name, email, password) {
     try {
       const response = await this.makeRequest('/auth/register', {
@@ -208,7 +209,7 @@ class ApiService {
     });
   }
 
-  // Payment methods
+  // payment methods
   async addPaymentMethod(paymentData) {
     return await this.makeRequest('/auth/payment-methods', {
       method: 'POST',
@@ -249,7 +250,7 @@ class ApiService {
     });
   }
 
-  // Remove/unfriend a user (mutual removal)
+  // remove/unfriend a user (mutual removal)
   async removeFriend(friendId) {
     const encoded = encodeURIComponent(String(friendId));
     return await this.makeRequest(`/users/friends/${encoded}`, {
@@ -257,7 +258,7 @@ class ApiService {
     });
   }
 
-  // Group methods
+  // group methods
   async getGroups() {
     return await this.makeRequest('/groups');
   }
@@ -309,12 +310,12 @@ class ApiService {
     return await this.makeRequest(`/groups/${groupId}/balances`);
   }
 
-  // Transaction methods
+  // transaction methods
   async getTransactions(groupId, page = 1, limit = 20) {
     return await this.makeRequest(`/transactions/group/${groupId}?page=${page}&limit=${limit}=`);
   }
 
-  // need to getTransactions for a user
+  // need to gettransactions for a user
   async getUsersTransactions(userId, page = 1, limit = 20) {
     return await this.makeRequest(`/transactions/user/${userId}?page=${page}&limit=${limit}`);
   }
@@ -340,9 +341,9 @@ class ApiService {
     });
   }
 
-  // Mark a participant (or the current user) as paid for a transaction.
-  // The backend settle endpoint expects { userId?, paid?, paymentMethod? }.
-  // We keep this method simple and explicit so callers can pass the user being marked.
+  // mark a participant (or the current user) as paid for a transaction.
+  // the backend settle endpoint expects { userid?, paid?, paymentmethod? }.
+  // we keep this method simple and explicit so callers can pass the user being marked.
   async markTransactionPaid(transactionId, userId = null, paid = true, paymentMethod = null) {
     const body = { paymentMethod };
     if (userId) body.userId = userId;
@@ -374,7 +375,7 @@ class ApiService {
     }
   }
 
-  // Friend request methods
+  // friend request methods
   async sendFriendRequest(toId, message = '') {
     return await this.makeRequest('/users/requests', {
       method: 'POST',
@@ -398,21 +399,21 @@ class ApiService {
     });
   }
 
-  // Utility methods
+  // utility methods
   async healthCheck() {
     return await this.makeRequest('/health', {
-      headers: { 'Content-Type': 'application/json' } // Don't include auth for health check
+      headers: { 'Content-Type': 'application/json' } // don't include auth for health check
     });
   }
 
 
-  // Debug: return authenticated user and populated friends (dev only)
+  // debug: return authenticated user and populated friends (dev only)
   async getDebugUser() {
     return await this.makeRequest('/users/debug');
   }
 
 }
 
-// Create singleton instance
+// create singleton instance
 const apiService = new ApiService();
 export default apiService;

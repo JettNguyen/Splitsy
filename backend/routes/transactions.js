@@ -4,14 +4,14 @@ const { protect } = require('../middleware/auth');
 const Transaction = require('../models/Transaction');
 const Group = require('../models/Group');
 
-// @route   GET /api/transactions/user/balances
-// @desc    Compute user's balances across groups and a summary
-// @access  Private
+// route:get /api/transactions/user/balances
+// description:compute user's balances across groups and a summary
+// access:private
 router.get('/user/balances', protect, async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // Find groups where user is a member
+    // find groups where user is a member
     const groups = await Group.find({ 'members.user': userId }).select('id name').lean();
 
     const groupBalances = await Promise.all(groups.map(async (g) => {
@@ -25,7 +25,7 @@ router.get('/user/balances', protect, async (req, res) => {
       };
     }));
 
-    // Calculate balances for friend-to-friend transactions (transactions without a group)
+    // calculate balances for friend-to-friend transactions (transactions without a group)
     const friendTransactions = await Transaction.find({
       $and: [
         { 
@@ -52,11 +52,11 @@ router.get('/user/balances', protect, async (req, res) => {
       const isPayer = tx.payer.toString() === userId.toString();
       
       if (isPayer) {
-        // User paid the full amount
+        // user paid the full amount
         friendTotalPaid += tx.amount;
       }
       
-      // Check if user is also a participant and add their owed amount
+      // check if user is also a participant and add their owed amount
       const userParticipant = tx.participants.find(p => p.user.toString() === userId.toString());
       if (userParticipant) {
         friendTotalOwed += userParticipant.amount;
@@ -65,19 +65,19 @@ router.get('/user/balances', protect, async (req, res) => {
 
     friendBalance = friendTotalPaid - friendTotalOwed;
 
-    // Summarize across groups and friend transactions
+    // summarize across groups and friend transactions
     let netBalance = 0;
     let totalOwedToMe = 0;
     let totalIOwe = 0;
 
-    // Add group balances to the totals
+    // add group balances to the totals
     for (const gb of groupBalances) {
       netBalance += gb.balance;
       if (gb.balance > 0) totalOwedToMe += gb.balance;
       else totalIOwe += Math.abs(gb.balance);
     }
 
-    // Add friend transaction amounts to the totals
+    // add friend transaction amounts to the totals
     netBalance += friendBalance;
     if (friendBalance > 0) {
       totalOwedToMe += friendBalance;
@@ -85,7 +85,7 @@ router.get('/user/balances', protect, async (req, res) => {
       totalIOwe += Math.abs(friendBalance);
     }
 
-    // Add friend transactions as a separate "group" for detailed view
+    // add friend transactions as a separate "group" for detailed view
     const allBalances = [...groupBalances];
     if (friendTransactions.length > 0) {
       allBalances.push({
@@ -112,9 +112,9 @@ router.get('/user/balances', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/transactions/user/:userId
-// @desc    List transactions for a user
-// @access  Private
+// route:get /api/transactions/user/:userid
+// description:list transactions for a user
+// access:private
 router.get('/user/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -137,9 +137,9 @@ router.get('/user/:userId', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/transactions/group/:groupId
-// @desc    List transactions for a group
-// @access  Private
+// route:get /api/transactions/group/:groupid
+// description:list transactions for a group
+// access:private
 router.get('/group/:groupId', protect, async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -157,28 +157,28 @@ router.get('/group/:groupId', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/transactions
-// @desc    Create a transaction
-// @access  Private
+// route:post /api/transactions
+// description:create a transaction
+// access:private
 router.post('/', protect, async (req, res) => {
   try {
     const payload = { ...req.body };
-    // Ensure createdBy is set
+    // ensure createdby is set
     payload.createdBy = req.user._id;
 
-    // Only include group field if it's provided and valid
+    // only include group field if it's provided and valid
     if (!payload.group || !require('mongoose').Types.ObjectId.isValid(payload.group)) {
       delete payload.group;
     }
 
     const tx = await Transaction.create(payload);
-    // Populate payer and participants.user so frontend consumers receive the expected shape
+    // populate payer and participants.user so frontend consumers receive the expected shape
     const populatedTx = await Transaction.findById(tx._id)
       .populate('payer', 'id name email')
       .populate('participants.user', 'id name email')
       .lean();
 
-    // Update group's totals asynchronously (best-effort)
+    // update group's totals asynchronously (best-effort)
     try {
         if (tx.group) { // <-- check that group is truthy
           const group = await Group.findById(tx.group);
@@ -195,15 +195,15 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/transactions/friend/:friendId/balance
-// @desc    Get running balance with a specific friend
-// @access  Private
+// route:get /api/transactions/friend/:friendid/balance
+// description:get running balance with a specific friend
+// access:private
 router.get('/friend/:friendId/balance', protect, async (req, res) => {
   try {
     const userId = req.user._id;
     const friendId = req.params.friendId;
     
-    // Simplified approach: Get ALL transactions involving both users
+    // simplified approach: get all transactions involving both users
     const allTransactions = await Transaction.find({
       $and: [
         {
@@ -223,14 +223,14 @@ router.get('/friend/:friendId/balance', protect, async (req, res) => {
       ]
     }).populate('payer', 'name email').populate('participants.user', 'name email');
 
-    // Filter to only transactions that involve BOTH users
+    // filter to only transactions that involve both users
     const friendTransactions = allTransactions.filter(tx => {
       const payerIsUser = tx.payer._id.toString() === userId.toString();
       const payerIsFriend = tx.payer._id.toString() === friendId.toString();
       const userInParticipants = tx.participants.some(p => p.user._id.toString() === userId.toString());
       const friendInParticipants = tx.participants.some(p => p.user._id.toString() === friendId.toString());
       
-      // Transaction must involve both users somehow
+      // transaction must involve both users somehow
       return (payerIsUser || userInParticipants) && (payerIsFriend || friendInParticipants);
     });
 
@@ -238,16 +238,16 @@ router.get('/friend/:friendId/balance', protect, async (req, res) => {
     let totalPaid = 0;
     let totalOwed = 0;
 
-    // Calculate from user's perspective
+    // calculate from user's perspective
     friendTransactions.forEach(tx => {
       const userIsPayer = tx.payer._id.toString() === userId.toString();
       
       if (userIsPayer) {
-        // User paid the full amount
+        // user paid the full amount
         totalPaid += tx.amount;
       }
       
-      // Find user's participant entry to see what they owe
+      // find user's participant entry to see what they owe
       const userParticipant = tx.participants.find(p => p.user._id.toString() === userId.toString());
       if (userParticipant) {
         totalOwed += userParticipant.amount || 0;
@@ -276,9 +276,9 @@ router.get('/friend/:friendId/balance', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/transactions/:id
-// @desc    Get transaction by id
-// @access  Private
+// route:get /api/transactions/:id
+// description:get transaction by id
+// access:private
 router.get('/:id', protect, async (req, res) => {
   try {
     const tx = await Transaction.findById(req.params.id)
@@ -293,9 +293,9 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/transactions/:id
-// @desc    Update transaction
-// @access  Private
+// route:put /api/transactions/:id
+// description:update transaction
+// access:private
 router.put('/:id', protect, async (req, res) => {
   try {
     const tx = await Transaction.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
@@ -307,9 +307,9 @@ router.put('/:id', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/transactions/:id
-// @desc    Delete transaction
-// @access  Private
+// route:delete /api/transactions/:id
+// description:delete transaction
+// access:private
 router.delete('/:id', protect, async (req, res) => {
   try {
     await Transaction.findByIdAndDelete(req.params.id);
@@ -320,19 +320,19 @@ router.delete('/:id', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/transactions/:id/settle
-// @desc    Mark transaction/participant as settled (simple wrapper)
-// @access  Private
+// route:post /api/transactions/:id/settle
+// description:mark transaction/participant as settled (simple wrapper)
+// access:private
 router.post('/:id/settle', protect, async (req, res) => {
   try {
-    const { userId, paid, paymentMethodId } = req.body; // expecting userId, paid flag, optional paymentMethodId
+    const { userId, paid, paymentMethodId } = req.body; // expecting userid, paid flag, optional paymentmethodid
     const tx = await Transaction.findById(req.params.id);
     if (!tx) return res.status(404).json({ success: false, message: 'Transaction not found' });
 
-    // Attempt to mark the participant as paid first
+    // attempt to mark the participant as paid first
     await tx.markParticipantPaid(userId || req.user._id, paid !== false);
 
-    // If a payment method id was provided, attempt to record the settlement details
+    // if a payment method id was provided, attempt to record the settlement details
     if (paymentMethodId) {
       try {
         const User = require('../models/User');

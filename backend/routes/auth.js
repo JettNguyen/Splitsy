@@ -15,7 +15,7 @@ const {
 
 const { protect } = require('../middleware/auth');
 
-// Validation rules
+// validation rules
 const registerValidation = [
   body('name')
     .trim()
@@ -63,12 +63,12 @@ const paymentMethodValidation = [
     .withMessage('Payment handle is required and must be less than 100 characters')
 ];
 
-// Public routes
+// public routes
 router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
 
-// Protected routes
-router.use(protect); // All routes below this middleware require authentication
+// protected routes
+router.use(protect); // all routes below this middleware require authentication
 
 router.get('/me', getMe);
 router.put('/me', updateDetails);

@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-// Route imports
+// route imports
 const authRoutes = require('./routes/auth');
 const groupRoutes = require('./routes/groups');
 const requestRoutes = require('./routes/requests');
@@ -16,10 +16,10 @@ const transactionRoutes = require('./routes/transactions');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Connect to MongoDB
+// connect to mongodb
 const connectDB = async () => {
   try {
-  // Connect to MongoDB (URI hidden in logs to avoid leaking credentials)
+  // connect to mongodb (uri hidden in logs to avoid leaking credentials)
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
@@ -32,29 +32,29 @@ const connectDB = async () => {
   }
 };
 
-// Security middleware
+// security middleware
 app.use(helmet({
-  contentSecurityPolicy: false // Disable for development
+  contentSecurityPolicy: false // disable for development
 }));
 
-// Rate limiting
+// rate limiting
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each ip to 100 requests per windowms
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.'
   },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  standardHeaders: true, // return rate limit info in the `ratelimit-*` headers
+  legacyHeaders: false, // disable the `x-ratelimit-*` headers
 });
 
 app.use(limiter);
 
-// CORS configuration
+// cors configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
     const allowedOrigins = [
@@ -83,11 +83,11 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Body parser middleware
+// body parser middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
+// health check endpoint
 app.get('/health', (req, res) => {
   res.json({
     success: true,
@@ -97,18 +97,18 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API routes
+// api routes
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/users', requestRoutes);
 app.use('/api/users', friendRoutes);
 
-// Global error handler
+// global error handler
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
 
-  // Mongoose validation error
+  // mongoose validation error
   if (error.name === 'ValidationError') {
     const errors = Object.values(error.errors).map(err => ({
       field: err.path,
@@ -122,7 +122,7 @@ app.use((error, req, res, next) => {
     });
   }
 
-  // Mongoose cast error (invalid ObjectId)
+  // mongoose cast error (invalid objectid)
   if (error.name === 'CastError') {
     return res.status(400).json({
       success: false,
@@ -130,7 +130,7 @@ app.use((error, req, res, next) => {
     });
   }
 
-  // Mongoose duplicate key error
+  // mongoose duplicate key error
   if (error.code === 11000) {
     const field = Object.keys(error.keyValue)[0];
     return res.status(400).json({
@@ -139,7 +139,7 @@ app.use((error, req, res, next) => {
     });
   }
 
-  // CORS error
+  // cors error
   if (error.message === 'Not allowed by CORS') {
     return res.status(403).json({
       success: false,
@@ -147,7 +147,7 @@ app.use((error, req, res, next) => {
     });
   }
 
-  // JWT errors
+  // jwt errors
   if (error.name === 'JsonWebTokenError') {
     return res.status(401).json({
       success: false,
@@ -162,7 +162,7 @@ app.use((error, req, res, next) => {
     });
   }
 
-  // Default server error
+  // default server error
   res.status(500).json({
     success: false,
     message: process.env.NODE_ENV === 'production' 
@@ -179,31 +179,32 @@ app.use('*', (req, res) => {
   });
 });
 
-// Start server
+// start server
 const startServer = async () => {
   await connectDB();
   
-  app.listen(PORT, () => {
-    console.log(`Server running in ${process.env.NODE_ENV || 'development'} on port ${PORT}`);
-    console.log(`Health check available at http://localhost:${PORT}/health`);
-    console.log(`API base URL: http://localhost:${PORT}/api`);
+  const server = app.listen(PORT, () => {
+    const actualPort = server.address().port;
+    console.log(`Server running in ${process.env.NODE_ENV || 'development'} on port ${actualPort}`);
+    console.log(`Health check available at http://localhost:${actualPort}/health`);
+    console.log(`API base URL: http://localhost:${actualPort}/api`);
   });
 };
 
-// Handle unhandled promise rejections
+// handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
   console.error('Unhandled Promise Rejection:', err);
-  // Close server & exit process
+  // close server & exit process
   process.exit(1);
 });
 
-// Handle uncaught exceptions
+// handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
   process.exit(1);
 });
 
-// Graceful shutdown
+// graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\nGraceful shutdown initiated...');
   try {

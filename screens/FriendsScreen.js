@@ -34,9 +34,9 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
   const [selectedFriendForDetails, setSelectedFriendForDetails] = useState(null);
   const [showFriendDetails, setShowFriendDetails] = useState(false);
   const [friendBalance, setFriendBalance] = useState(null);
-  const [friendBalances, setFriendBalances] = useState({}); // Store balances for all friends
+  const [friendBalances, setFriendBalances] = useState({}); // store balances for all friends
 
-  // Payment modal & options
+  // payment modal & options
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentOptions, setPaymentOptions] = useState([]);
   const [isLoadingPaymentOptions, setIsLoadingPaymentOptions] = useState(false);
@@ -178,7 +178,7 @@ const handleSettleGroupBalance = async () => {
   }
 };
 
-// Load and intersect payment options between current user and target user
+// load and intersect payment options between current user and target user
 const loadPaymentOptions = async (targetUserId) => {
   setIsLoadingPaymentOptions(true);
   try {
@@ -188,8 +188,8 @@ const loadPaymentOptions = async (targetUserId) => {
     const myMethods = (myMethodsResp && myMethodsResp.data && myMethodsResp.data.paymentMethods) ? myMethodsResp.data.paymentMethods : myMethodsResp.paymentMethods || myMethodsResp || [];
     const friendMethods = (friendMethodsResp && friendMethodsResp.data && friendMethodsResp.data.paymentMethods) ? friendMethodsResp.data.paymentMethods : friendMethodsResp.paymentMethods || friendMethodsResp || [];
 
-    // Only show payment methods that the other user has configured (target)
-    // We will present friendMethods as options to pay to (since you pay to their handle)
+  // only show payment methods that the other user has configured (target)
+  // we will present friendMethods as options to pay to (since you pay to their handle)
     if (!friendMethods || friendMethods.length === 0) {
       Alert.alert('No payment methods', 'This user has not added any payment methods.');
       setPaymentOptions([]);
@@ -206,7 +206,7 @@ const loadPaymentOptions = async (targetUserId) => {
   }
 };
 
-// Deep link map for common payment apps
+  // deep link map for common payment apps
 const paymentDeepLink = (method, handle) => {
   switch (method) {
     case 'Venmo':
@@ -217,7 +217,7 @@ const paymentDeepLink = (method, handle) => {
     case 'PayPal':
       return `paypal://send?recipient=${encodeURIComponent(handle)}`;
     case 'Zelle':
-      // Zelle deep links vary by bank; fallback to mailto for email or tel for phone
+  // zelle deep links vary by bank; fallback to mailto for email or tel for phone
       if (handle.includes('@')) return `mailto:${handle}`;
       return `tel:${handle}`;
     default:
@@ -233,15 +233,15 @@ const openPaymentApp = async (method) => {
       if (supported) {
         await Linking.openURL(url);
       } else {
-        // fallback: copy handle to clipboard and show instructions
+      // fallback: copy handle to clipboard and show instructions
         Alert.alert('Open Payment App', `Could not open ${method.type} app. Please use handle: ${method.handle}`);
       }
-      // mark transaction/participant as paid on backend (best-effort)
+  // mark transaction/participant as paid on backend (best-effort)
       if (selectedFriendForDetails && friendBalance) {
         try {
-          // Find a transaction to mark as paid: in friend flows we don't have a single tx id; the app marks using settle endpoint on relevant tx ids.
-          // For simplicity we'll call the backend settle endpoint with paymentMethodId so it records the attempt against the last transaction if applicable.
-          // NOTE: this is a best-effort placeholder; ideally we'd pass a specific transaction id and amount.
+          // find a transaction to mark as paid: in friend flows we don't have a single tx id; the app marks using settle endpoint on relevant tx ids.
+          // for simplicity we'll call the backend settle endpoint with paymentMethodId so it records the attempt against the last transaction if applicable.
+          // note: this is a best-effort placeholder; ideally we'd pass a specific transaction id and amount.
           await apiService.markTransactionPaid(selectedFriendForDetails.id, null, true, method.id);
         } catch (err) {
           console.warn('Failed to mark backend paid:', err.message || err);
@@ -267,7 +267,7 @@ const openPaymentApp = async (method) => {
         const result = await apiService.getFriends();
         if (result && result.success && Array.isArray(result.friends)) {
           setFriends(result.friends);
-          // Fetch balances for all friends
+          // fetch balances for all friends
           const balances = {};
           for (const friend of result.friends) {
             try {
@@ -297,7 +297,7 @@ const openPaymentApp = async (method) => {
       }
     };
 
-    // Only fetch protected data when user is authenticated and an auth token exists
+  // only fetch protected data when user is authenticated and an auth token exists
     if (isAuthenticated && apiService.token) {
       fetchFriends();
       fetchRequests();
@@ -314,7 +314,7 @@ const openPaymentApp = async (method) => {
       return;
     }
 
-    // Prepare payload: backend accepts optional memberEmails
+      // prepare payload: backend accepts optional memberEmails
     const memberEmails = selectedFriends.length > 0
       ? friends
           .filter(f => selectedFriends.includes(f.id) || selectedFriends.includes(f._id))
@@ -341,12 +341,12 @@ const openPaymentApp = async (method) => {
   };
 
   const handleLeaveGroup = async (groupId, groupName) => {
-    // Leave group instead of deleting it
+    // leave group
     try {
       const result = await apiService.leaveGroup(groupId);
       if (result && result.success) {
         setGroups(prev => prev.filter(group => group.id !== groupId));
-        // Close modal if it's open
+        // close modal if it's open
         if (selectedGroupForDetails && selectedGroupForDetails.id === groupId) {
           setShowGroupDetails(false);
           setSelectedGroupForDetails(null);
@@ -373,7 +373,7 @@ const openPaymentApp = async (method) => {
         setSelectedGroupForDetails(null);
         setGroupBalance(null);
       }
-      // no user-facing Alert per request
+  // no user-facing alert per request
     } catch (error) {
       console.error('Error deleting group:', error);
       // keep silent for now; could show a toast/snackbar later
@@ -442,7 +442,7 @@ const openPaymentApp = async (method) => {
     );
   };
 
-  // Friend details modal handlers
+  // friend details modal handlers
 
   const handleAccept = async (requestId) => {
     try {
@@ -712,7 +712,7 @@ const openPaymentApp = async (method) => {
 
       {/*tab navigation*/}
       <View style={[styles.tabContainer, { backgroundColor: theme.colors.card }]}>
-        {/* Friends Tab */}
+        {/* friends Tab */}
         <TouchableOpacity
           style={[
             styles.tab,
@@ -728,7 +728,7 @@ const openPaymentApp = async (method) => {
           </Text>
         </TouchableOpacity>
 
-        {/* Groups Tab */}
+        {/* groups Tab */}
         <TouchableOpacity
           style={[
             styles.tab,
@@ -748,7 +748,7 @@ const openPaymentApp = async (method) => {
       {/*tab content*/}
       {renderTabContent()}
 
-      {/* Friend details modal */}
+      {/* friend details modal */}
       {selectedFriendForDetails && (
         <Modal
           visible={showFriendDetails}
@@ -762,7 +762,7 @@ const openPaymentApp = async (method) => {
                 <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{selectedFriendForDetails.name || 'Friend'}</Text>
                 <Text style={{ color: theme.colors.textSecondary, marginBottom: 12 }}>{selectedFriendForDetails.email}</Text>
                 
-                {/* Balance Information */}
+                {/* balance Information */}
                 {friendBalance && (
                   <View style={{ marginBottom: 20, padding: 15, backgroundColor: theme.colors.background, borderRadius: 8, width: '100%' }}>
                     <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8 }}>Running Balance</Text>
@@ -813,7 +813,7 @@ const openPaymentApp = async (method) => {
         </Modal>
       )}
 
-      {/* Group details modal */}
+      {/* group details modal */}
       {selectedGroupForDetails && (
         <Modal
           visible={showGroupDetails}
@@ -825,9 +825,25 @@ const openPaymentApp = async (method) => {
             <SafeAreaView style={[styles.modalContainer, { justifyContent: 'center', alignItems: 'stretch' }]}> 
               <TouchableOpacity activeOpacity={1} style={[styles.friendDetailsModal, { backgroundColor: theme.colors.card }]}>
                 <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{selectedGroupForDetails.name || 'Group'}</Text>
-                <Text style={{ color: theme.colors.textSecondary, marginBottom: 12 }}>{selectedGroupForDetails.memberCount || 0} members</Text>
+                {/* show a list of group members (avatars + names) instead of just a count */}
+                <View style={{ marginBottom: 12 }}>
+                  {(selectedGroupForDetails.members || []).length === 0 ? (
+                    <Text style={{ color: theme.colors.textSecondary }}>No members</Text>
+                  ) : (
+                    (selectedGroupForDetails.members || []).map((m, idx) => {
+                      const memberKey = String(m?.user?._id || m?.user?.id || (typeof m?.user === 'string' ? m.user : null) || m?.id || idx);
+                      return (
+                      <View key={memberKey} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                          <Text style={{ color: 'white', fontWeight: '700' }}>{(m.user && m.user.name) ? (m.user.name[0]) : (m.name ? m.name[0] : '?')}</Text>
+                        </View>
+                        <Text style={{ color: theme.colors.text }}>{m.user?.name || m.name || m.email || 'Member'}</Text>
+                      </View>
+                    )})
+                  )}
+                </View>
                 
-                {/* Balance Information */}
+                {/* balance Information */}
                 {groupBalance && (
                   <View style={{ marginBottom: 20, padding: 15, backgroundColor: theme.colors.background, borderRadius: 8, width: '100%' }}>
                     <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8 }}>Your Group Balance</Text>
@@ -875,7 +891,7 @@ const openPaymentApp = async (method) => {
         </Modal>
       )}
 
-      {/* Payment method selection modal */}
+      {/* payment method selection modal */}
       <Modal
         visible={showPaymentModal}
         animationType="slide"
@@ -1056,7 +1072,6 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     marginBottom: 12,
-    // keep overflow visible so shadows show
     overflow: 'visible',
     zIndex: 5,
   },

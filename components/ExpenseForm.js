@@ -44,7 +44,7 @@ const ExpenseForm = ({visible,
     category: 'other',
     splitType: 'equal',
     participants: [],
-    items: [],            //data from receipt
+    items: [],            // data from receipt
     subtotal: 0,
     service_charge: 0,
     ...initialData
@@ -54,13 +54,13 @@ const ExpenseForm = ({visible,
   const [loading, setLoading] = useState(false);
   const [showReceiptScanner, setShowReceiptScanner] = useState(false);
 
-  // “unit” assignments for Split by Item (expand qty → units)
-  const [unitAssignments, setUnitAssignments] = useState([]); // [{ unitId, memberId }]
-  const [openUnit, setOpenUnit] = useState(null); // which unitId's dropdown is open (kept but unused now)
+  // "unit" assignments for split by item (expand qty → units)
+  const [unitAssignments, setUnitAssignments] = useState([]); // [{ unitid, memberid }]
+  const [openUnit, setOpenUnit] = useState(null); // which unitid's dropdown is open (kept but unused now)
 
   const [assignModal, setAssignModal] = useState({ open: false, unitId: null });
 
-// FETCH FRIENDS FROM DB
+// fetch friends from db
 const [friends, setFriends] = useState([]);
 const [loadingFriends, setLoadingFriends] = useState(false);
 
@@ -81,7 +81,7 @@ useEffect(() => {
   fetchFriends();
 }, []);
 
-// FETCH GROUPS FROM DB
+// fetch groups from db
 const [groups, setGroups] = useState([]);
 const [loadingGroups, setLoadingGroups] = useState(false);
 
@@ -112,7 +112,7 @@ useEffect(() => {
   };
 
   // -------------------------
-  // Validation + Submit
+  // validation + submit
   // -------------------------
   const validateForm = () => {
     if (!formData.description.trim()) return 'Please enter a description';
@@ -161,12 +161,12 @@ useEffect(() => {
   };
 
   // -------------------------
-  // Group + Participants
+  // group + participants
   // -------------------------
 const handleGroupSelect = (groupId) => {
   const current = formData.groupId;
   if (current === groupId) {
-    // If clicked the same group, unselect it
+    // if clicked the same group, unselect it
     updateFormData('groupId', '');
     updateFormData('participants', []);
   } else {
@@ -174,7 +174,7 @@ const handleGroupSelect = (groupId) => {
     updateFormData('groupId', groupId);
 
     if (group) {
-      // Extract unique user IDs
+      // extract unique user ids
       const uniqueUserIds = Array.from(
         new Set(group.members.map(member => member.user.id))
       );
@@ -191,7 +191,7 @@ const handleFriendSelect = (friendId) => {
       ? prev.participants.filter(id => id !== friendId) // remove
       : [...prev.participants, friendId]; // add
 
-    // Ensure current user is always included
+    // ensure current user is always included
     if (!participantsById.includes(currentUser.id)) {
       participantsById = [currentUser.id, ...participantsById];
     }
@@ -201,7 +201,7 @@ const handleFriendSelect = (friendId) => {
 };
 
   // -------------------------
-  // Receipt Scanner → populate fields
+  // receipt scanner → populate fields
   // -------------------------
   const handleReceiptScanned = (receiptData) => {
     if (receiptData) {
@@ -219,7 +219,7 @@ const handleFriendSelect = (friendId) => {
       const total = parseFloat(totalStr) || 0;
       const service_charge = Math.max(0, total - subtotal);
 
-      //test participants for now
+      // test participants for now
       let participants = formData.participants;
       if (!formData.groupId || participants.length === 0) {
         participants = ['Harry', 'Ron', 'Hermione'];
@@ -263,18 +263,18 @@ const handleFriendSelect = (friendId) => {
   };
 
   // -------------------------
-  // Split logic (equal / by item)
+  // split logic (equal / by item)
   // -------------------------
   const nMoney = (v) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : 0);
   const nInt = (v, d = 1) => (Number.isFinite(parseInt(v, 10)) ? parseInt(v, 10) : d);
 
 const memberList = useMemo(() => {
   return (formData.participants || []).map(userId => {
-    // First check friends
+    // first check friends
     const friend = friends.find(f => f.id === userId);
     if (friend) return { id: friend.id, name: friend.name };
 
-    // Then check selected group members
+    // then check selected group members
     const groupMember = groups
       .flatMap(g => g.members)
       .find(m => m.user.id === userId);
@@ -327,7 +327,7 @@ const memberList = useMemo(() => {
   };
 
   // -------------------------
-  // Render helpers
+  // render helpers
   // -------------------------
   const CategoryItem = ({ category }) => {
     const isSelected = formData.category === category.id;
@@ -538,7 +538,7 @@ const FriendItem = ({ friend }) => {
 
           <ScrollView style={styles.groupList} showsVerticalScrollIndicator={false}>
 
-            {/* --- Groups Section --- */}
+            {/* --- groups section --- */}
             <View style={[styles.sectionContainer, { backgroundColor: theme.colors.card }]}>
               <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Groups</Text>
               {groups.map(group => (
@@ -546,7 +546,7 @@ const FriendItem = ({ friend }) => {
               ))}
             </View>
 
-            {/* --- Friends Section --- */}
+            {/* --- friends section --- */}
             <View style={[styles.sectionContainer, { backgroundColor: theme.colors.card, marginTop: 16 }]}>
               <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Friends</Text>
               {friends.map(friend => (
@@ -585,7 +585,7 @@ const FriendItem = ({ friend }) => {
               </Text>
             </View>
 
-            {/* Split Mode Toggle */}
+            {/* split mode toggle */}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
               <TouchableOpacity
                 onPress={() => updateFormData('splitType', 'equal')}
@@ -618,7 +618,7 @@ const FriendItem = ({ friend }) => {
 
             {formData.splitType === 'equal' ? (
               // -------------------------
-              // Split Evenly
+              // split evenly
               // -------------------------
               <View style={{ marginTop: 16 }}>
                 {memberList.map(m => (
@@ -632,7 +632,7 @@ const FriendItem = ({ friend }) => {
               </View>
             ) : (
               // -------------------------
-              // Split by Item
+              // split by item
               // -------------------------
               <View style={{ marginTop: 16 }}>
                 <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>
@@ -698,7 +698,7 @@ const FriendItem = ({ friend }) => {
   };
 
   // -------------------------
-  // Render
+  // render
   // -------------------------
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
@@ -837,7 +837,7 @@ const AssignMemberModal = ({ visible, onClose, memberList, theme, onPick }) => {
 };
 
 // -------------------------
-// Styles
+// styles
 // -------------------------
 const styles = StyleSheet.create({
   container: {

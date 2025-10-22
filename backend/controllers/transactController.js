@@ -1,12 +1,13 @@
-// Transaction controller: handles creating, listing, updating, and settling transactions.
-// Comments in this file are written for clarity (inputs/outputs and high-level intent).
+// transaction controller: handles creating, listing, updating, and settling transactions
+// comments describe inputs/outputs at a high level
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 
 
 
 async function createTransaction(req, res) {
-  // Create a new transaction from request body. Validations below ensure required fields are present.
+  // create a new transaction from the request body
+  // basic validations to ensure required fields are present
   try {
     const {
       description,
@@ -31,31 +32,28 @@ async function createTransaction(req, res) {
       return res.status(400).json({ message: 'valid payer id is required' });
     }
 
+  const actualGroup = group || payer;
+
     const mappedParticipants = participants.map(p => 
       typeof p === 'string' ? { user: p, paid: false } : { user: p.user, paid: false }
     );
 
-    const transactionData = {
+  const tx = new Transaction({
       description,
       amount,
       currency: currency || 'USD',
       payer,
+      group: actualGroup,
       category: category || 'other',
       splitMethod: splitMethod || 'equal',
       participants: mappedParticipants,
       notes,
       tags,
       createdBy: req.user ? req.user._id : payer
-    };
-
-    // Only set group if it's provided and valid
-    if (group && mongoose.Types.ObjectId.isValid(group)) {
-      transactionData.group = group;
-    }
-
-    const tx = new Transaction(transactionData);
+    });
 
   const saved = await tx.save();
+  console.log('Transaction saved:', saved);
 
     const populated = await Transaction.findById(saved._id)
       .populate('payer', 'name email')
@@ -64,12 +62,12 @@ async function createTransaction(req, res) {
 
     return res.status(201).json(populated);
   } catch (err) {
-    console.error('Transaction controller - createTransaction error:', err && (err.message || err));
+    console.error('createTransaction error', err);
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
 
-// Get list of transactions with optional filters + pagination
+  // get list of transactions with optional filters and pagination
 async function getTransactions(req, res) {
   try {
     const {
@@ -85,7 +83,7 @@ async function getTransactions(req, res) {
       sort = '-createdAt'
     } = req.query;
 
-    const filter = {};
+  const filter = {};
     if (group && mongoose.Types.ObjectId.isValid(group)) filter.group = group;
     if (payer && mongoose.Types.ObjectId.isValid(payer)) filter.payer = payer;
     if (participant && mongoose.Types.ObjectId.isValid(participant)) filter['participants.user'] = participant;
@@ -97,7 +95,7 @@ async function getTransactions(req, res) {
       if (endDate) filter.createdAt.$lte = new Date(endDate);
     }
 
-    const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
+  const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
     const [total, transactions] = await Promise.all([
       Transaction.countDocuments(filter),
       Transaction.find(filter)
@@ -116,12 +114,12 @@ async function getTransactions(req, res) {
       transactions
     });
   } catch (err) {
-    console.error('Transaction controller - getTransactions error:', err && (err.message || err));
+    console.error('getTransactions error', err);
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
 
-// Get a single transaction by id
+// get a single transaction by id
 async function getTransactionById(req, res) {
   try {
     const { id } = req.params;
@@ -136,12 +134,12 @@ async function getTransactionById(req, res) {
 
     return res.json(tx);
   } catch (err) {
-    console.error('Transaction controller - getTransactionById error:', err && (err.message || err));
+    console.error('getTransactionById error', err);
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
 
-// Update a transaction (partial update)
+// update a transaction (partial update)
 async function updateTransaction(req, res) {
   try {
     const { id } = req.params;
@@ -160,12 +158,12 @@ async function updateTransaction(req, res) {
 
     return res.json(updated);
   } catch (err) {
-    console.error('Transaction controller - updateTransaction error:', err && (err.message || err));
+    console.error('updateTransaction error', err);
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
 
-// Delete a transaction
+// delete a transaction
 async function deleteTransaction(req, res) {
   try {
     const { id } = req.params;
@@ -176,12 +174,12 @@ async function deleteTransaction(req, res) {
 
     return res.json({ message: 'Deleted', id: deleted._id });
   } catch (err) {
-    console.error('Transaction controller - deleteTransaction error:', err && (err.message || err));
+    console.error('deleteTransaction error', err);
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
 
-// Mark a participant as paid/unpaid
+// mark a participant as paid or unpaid for a transaction
 async function markParticipantPaid(req, res) {
   try {
     const { id } = req.params; // transaction id
@@ -198,12 +196,12 @@ async function markParticipantPaid(req, res) {
     const refreshed = await Transaction.findById(id).populate('participants.user', 'name email');
     return res.json(refreshed);
   } catch (err) {
-    console.error('Transaction controller - markParticipantPaid error:', err && (err.message || err));
+    console.error('markParticipantPaid error', err);
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
 
-// Add approval for a transaction
+// add approval for a transaction
 async function addApproval(req, res) {
   try {
     const { id } = req.params; // transaction id
@@ -220,12 +218,12 @@ async function addApproval(req, res) {
     const refreshed = await Transaction.findById(id).populate('approvals.user', 'name email');
     return res.json(refreshed);
   } catch (err) {
-    console.error('Transaction controller - addApproval error:', err && (err.message || err));
+    console.error('addApproval error', err);
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }
 
-// Get user's balance within a group
+// get a user's balance within a group
 async function getUserGroupBalance(req, res) {
   try {
     const { userId, groupId } = req.params;
@@ -236,7 +234,7 @@ async function getUserGroupBalance(req, res) {
     const result = await Transaction.getUserGroupBalance(userId, groupId);
     return res.json(result);
   } catch (err) {
-    console.error('Transaction controller - getUserGroupBalance error:', err && (err.message || err));
+    console.error('getUserGroupBalance error', err);
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 }

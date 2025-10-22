@@ -213,7 +213,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
           <View style={[styles.centerContainer, { backgroundColor: theme.colors.background }]}>
             <View style={[styles.header, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
               <TouchableOpacity onPress={handleClose}>
-                <Text style={[styles.closeButtonText, { color: theme.colors.text }]}>✕</Text>
+                <Text style={[styles.closeButtonText, { color: theme.colors.text, textAlign: 'right' }]}>✕</Text>
               </TouchableOpacity>
               <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Receipt Scanner</Text>
               <View style={{ width: 20 }} />
@@ -224,16 +224,16 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
               <Text style={[{ fontSize: 22, fontWeight: '700', marginBottom: 8, color: theme.colors.text }]}>
                 Scan Receipt
               </Text>
-              <Text style={[{ fontSize: 15, marginBottom: 24, color: theme.colors.textSecondary, textAlign: 'center' }]}>
+              {/* <Text style={[{ fontSize: 15, marginBottom: 24, color: theme.colors.textSecondary, textAlign: 'center' }]}>
                 we’ll read the text, save a json on the server, and let you edit the details
-              </Text>
+              </Text> */}
 
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: theme.colors.primary, marginBottom: 12 }]}
                 onPress={takePhoto}
                 disabled={isProcessing}
               >
-                <Text style={styles.actionButtonText}>📷 take photo</Text>
+                <Text style={styles.actionButtonText}>📷 Take Photo</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -241,7 +241,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
                 onPress={pickImage}
                 disabled={isProcessing}
               >
-                <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>choose from gallery</Text>
+                <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>Choose From Gallery</Text>
               </TouchableOpacity>
 
               {isProcessing && (
@@ -269,7 +269,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
 
             {capturedImage ? <Image source={{ uri: capturedImage }} style={styles.previewImage} /> : null}
 
-            {(savedInfo.saved_json_path || savedInfo.saved_image_path) && (
+            {/* {(savedInfo.saved_json_path || savedInfo.saved_image_path) && (
               <View style={[styles.infoBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
                 <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>saved on server:</Text>
                 {!!savedInfo.saved_json_path && (
@@ -283,10 +283,10 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
                   </Text>
                 )}
               </View>
-            )}
+            )} */}
 
             <View style={[styles.formSection, { backgroundColor: theme.colors.card }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Receipt</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text, textAlign: 'center' }]}>Receipt Details</Text>
 
               <View style={styles.inputGroup}>
                 <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Merchant</Text>
@@ -337,7 +337,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
 
             <View style={[styles.formSection, { backgroundColor: theme.colors.card }]}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Items (optional)</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Add Additional Items</Text>
                 <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={addItem}>
                   <Text style={styles.addButtonText}>+ Add item</Text>
                 </TouchableOpacity>
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     fontWeight: '700' 
   },
 
-  closeButtonText: { fontSize: 18 },
+  closeButtonText: { fontSize: 20 },
 
   actionButton: {
     paddingHorizontal: 26, 

@@ -321,6 +321,11 @@ class ApiService {
     return await this.makeRequest(`/transactions/group/${groupId}?page=${page}&limit=${limit}=`);
   }
 
+  // need to getTransactions for a user
+  async getUsersTransactions(userId, page = 1, limit = 20) {
+    return await this.makeRequest(`/transactions/user/${userId}?page=${page}&limit=${limit}`);
+  }
+
  async createTransaction(transactionData) {
   console.log('Request body:', transactionData); // debug
   return await this.makeRequest('/transactions', {

@@ -4,6 +4,31 @@ const { protect } = require('../middleware/auth');
 const Transaction = require('../models/Transaction');
 const Group = require('../models/Group');
 
+// @route   GET /api/transactions/user/:userId
+// @desc    List transactions for a user
+// @access  Private
+router.get('/user/:userId', protect, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const transactions = await Transaction.find({
+      $or: [
+        { payer: userId },
+        { 'participants.user': userId }
+      ]
+    })
+      .populate('payer', 'id name email')
+      .populate('participants.user', 'id name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({ success: true, data: transactions });
+  } catch (error) {
+    console.error('API Service Error fetching user transactions:', error);
+    return res.status(500).json({ success: false, message: 'Server error fetching transactions' });
+  }
+});
+
 // @route   GET /api/transactions/group/:groupId
 // @desc    List transactions for a group
 // @access  Private

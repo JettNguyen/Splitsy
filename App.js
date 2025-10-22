@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -133,27 +133,34 @@ function EmptyState({ title, subtitle, theme }) {
   );
 }
 
-function TransactionItem({ transaction, theme }) {
-  const isOwed = transaction.type === 'owed';
+function TransactionItem({ transaction, theme, currentUserId }) {
+  // Determine if this user is owed money or owes money
+  const isPayer = transaction.payer?._id === currentUserId || transaction.payer?.id === currentUserId;
+  const isOwed = isPayer; // If user is payer, others owe them
   const color = isOwed ? theme.colors.success : theme.colors.error;
+  
+  // Find the other user involved (if payer, show participant; if participant, show payer)
+  const otherUser = isPayer 
+    ? transaction.participants?.[0]?.name 
+    : transaction.payer;
   
   return (
     <View style={[AppStyles.transactionCard, { backgroundColor: theme.colors.card }]}>
       <View style={AppStyles.transactionRow}>
         <View style={[AppStyles.avatar, { backgroundColor: color }]}>
-          <Text style={AppStyles.avatarText}>{transaction.user?.name?.[0] || 'U'}</Text>
+          <Text style={AppStyles.avatarText}>{otherUser?.name?.[0] || 'U'}</Text>
         </View>
         <View style={AppStyles.transactionInfo}>
           <ThemedText style={AppStyles.transactionTitle} theme={theme}>
             {transaction.description}
           </ThemedText>
           <ThemedText style={AppStyles.transactionSubtitle} color={theme.colors.textSecondary} theme={theme}>
-            {transaction.group?.name || 'Personal'}
+            {transaction.group?.name || 'Personal'} • {isOwed ? 'You lent' : 'You borrowed'}
           </ThemedText>
         </View>
         <View style={AppStyles.transactionAmount}>
           <ThemedText style={AppStyles.amount} color={color} theme={theme}>
-            ${transaction.amount}
+            {isOwed ? '+' : '-'}${transaction.amount}
           </ThemedText>
           <View style={[AppStyles.status, { backgroundColor: theme.colors.surface }]}>
             <Text style={[
@@ -170,6 +177,34 @@ function TransactionItem({ transaction, theme }) {
 }
 
 function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpense, currentUser }) {
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true);
+
+      const result = await apiService.getUsersTransactions(currentUser.id);
+
+      if (!result?.success) {
+        throw new Error(result?.message || 'Failed to fetch transactions');
+      }
+
+      setRecentActivity(result.data || []);
+    } catch (err) {
+      console.error('APP.JS Error fetching transactions:', err);
+      setError(err.message || 'Error fetching transactions');
+    } finally {
+      setLoading(false);
+}
+  };
+
+  if (currentUser?.id || currentUser?._id) {
+    fetchTransactions();
+  }
+}, [currentUser?.id, currentUser?._id]);
+
   return (
     <ScrollView 
       style={AppStyles.content} 
@@ -215,18 +250,23 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
       <View style={AppStyles.section}>
         <ThemedText style={AppStyles.sectionTitle} theme={theme}>Recent Activity</ThemedText>
         
-        {userTransactions.length === 0 ? (
+        {loading ? (
+          <ThemedText theme={theme}>Loading...</ThemedText>
+        ) : error ? (
+          <ThemedText color={theme.colors.error} theme={theme}>{error}</ThemedText>
+        ) : recentActivity.length === 0 ? (
           <EmptyState 
             title="No transactions yet" 
             subtitle="Add an expense to get started"
             theme={theme}
           />
         ) : (
-          userTransactions.slice(0, 5).map((transaction, index) => (
+          recentActivity.slice(0, 5).map((transaction) => (
             <TransactionItem 
-              key={index} 
+              key={transaction._id || transaction.id} 
               transaction={transaction} 
-              theme={theme} 
+              theme={theme}
+              currentUserId={currentUser?.id || currentUser?._id}
             />
           ))
         )}

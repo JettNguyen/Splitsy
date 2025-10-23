@@ -13,13 +13,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
-
-// context imports
 import { useUser } from '../context/UserContext';
 import { useData } from '../context/ApiDataContext';
 import { useTheme } from '../context/ThemeContext';
 
-// profile and settings screen component
 const ProfileScreen = ({ 
   onNavigateToPaymentMethods,
   onNavigateToNotifications,
@@ -38,7 +35,6 @@ const ProfileScreen = ({
     phone: currentUser?.phone || ''
   });
 
-  // prefer server-provided balances when available; otherwise fall back to local calculation
   const serverSummary = userBalances && userBalances.summary ? userBalances.summary : null;
   const balanceData = serverSummary ? {
     owed: serverSummary.totalOwedToMe || 0,
@@ -181,11 +177,9 @@ const ProfileScreen = ({
             title="Manage Groups"
             subtitle={userGroups && userGroups.length ? `You are a member of ${userGroups.length} group(s)` : 'No groups yet'}
             onPress={() => {
-              // open the local group picker; when a group is chosen we'll tell App to open the management modal
               if (userGroups && userGroups.length) {
                 setShowGroupPicker(true);
               } else if (typeof onNavigateToGroupManagement === 'function') {
-                // fall back to calling handler with no id (App currently ignores no-id calls)
                 onNavigateToGroupManagement();
               } else {
                 Alert.alert(
@@ -301,7 +295,6 @@ const ProfileScreen = ({
                   style={[styles.groupPreviewItem, { backgroundColor: theme.colors.card }]}
                   onPress={() => {
                     setShowGroupPicker(false);
-                    // call the App handler with the selected group id
                     if (typeof onNavigateToGroupManagement === 'function') {
                       onNavigateToGroupManagement(g._id || g.id);
                     }

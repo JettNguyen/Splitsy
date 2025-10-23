@@ -137,6 +137,7 @@ function EmptyState({ title, subtitle, theme }) {
 
 function TransactionItem(props) {
   const { transaction, theme, currentUserId, onSettleTransaction } = props || {};
+  const { onOpenTransaction } = props || {};
   const groups = (props && props.groups) || [];
   // determine if this user is the payer
   const payerId = transaction.payer?._id || transaction.payer?.id || transaction.payer;
@@ -215,7 +216,8 @@ function TransactionItem(props) {
   };
   
   return (
-    <View style={[AppStyles.transactionCard, { backgroundColor: theme.colors.card }]}>
+    <TouchableOpacity activeOpacity={0.9} onPress={() => onOpenTransaction && onOpenTransaction(transaction)}>
+      <View style={[AppStyles.transactionCard, { backgroundColor: theme.colors.card }]}>
       <View style={AppStyles.transactionRow}>
         <View style={[AppStyles.avatar, { backgroundColor: theme.colors.primary }]}>
           <Text style={AppStyles.avatarText}>{otherUserName?.[0] || 'U'}</Text>
@@ -269,7 +271,8 @@ function TransactionItem(props) {
           </View>
         </View>
       </View>
-    </View>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -279,33 +282,23 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
   const [error, setError] = useState(null);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [balanceModalTransactions, setBalanceModalTransactions] = useState([]);
+  const [selectedTxForModal, setSelectedTxForModal] = useState(null);
   
   const handleSettleTransaction = async (transactionId) => {
     try {
-      const result = await apiService.markTransactionPaid(transactionId, currentUser.id, true);
-      
-      if (result.success) {
-        // update the local state to reflect the settlement
-        setRecentActivity(prev => 
-          prev.map(transaction => 
-            (transaction._id || transaction.id) === transactionId 
-              ? { ...transaction, status: 'settled', settled: true }
-              : transaction
-          )
-        );
-        
-        // refresh user balances to reflect the settlement
-        if (fetchUserBalances) {
-          await fetchUserBalances();
-        }
-        
-        Alert.alert('Success', 'Transaction marked as settled!');
-      } else {
-        Alert.alert('Error', result.message || 'Failed to settle transaction');
+      // open the balance modal for this transaction so user can choose send/request flows
+      const tx = recentActivity.find(t => String(t._id || t.id) === String(transactionId));
+      if (!tx) {
+        Alert.alert('Error', 'Transaction not found');
+        return;
       }
-    } catch (error) {
-      console.error('Error settling transaction:', error);
-      Alert.alert('Error', 'Failed to settle transaction');
+
+      setBalanceModalTransactions([tx]);
+      setSelectedTxForModal(tx);
+      setShowBalanceModal(true);
+    } catch (err) {
+      console.error('Error opening settle modal:', err);
+      Alert.alert('Error', 'Failed to open settle modal');
     }
   };
 
@@ -414,6 +407,11 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
               groups={userGroups}
               currentUserId={currentUser?.id || currentUser?._id}
               onSettleTransaction={handleSettleTransaction}
+              onOpenTransaction={(tx) => {
+                setBalanceModalTransactions([tx]);
+                setSelectedTxForModal(tx);
+                setShowBalanceModal(true);
+              }}
             />
           ))
         )}
@@ -585,7 +583,13 @@ function MainApp() {
       // transform the expensedata into api payload
       const amount = parseFloat(expenseData.amount);
       // normalize participants: they might be ids or objects; ensure { user } shape
-      const participants = (expenseData.participants || []).map(id => ({ user: id }));
+      let participants = (expenseData.participants || []).map(id => ({ user: id }));
+
+      // ensure payer is included as participant when appropriate
+      const payerId = expenseData.payer || expenseData.paidBy || (currentUser.id || currentUser._id);
+      if (payerId && !participants.some(p => String(p.user) === String(payerId))) {
+        participants = [{ user: payerId }, ...participants];
+      }
 
       // for now, do equal split calculation
       const perPerson = Math.round((amount / participants.length) * 100) / 100;
@@ -595,13 +599,30 @@ function MainApp() {
         return { user: p.user, amount: Math.round((perPerson + adj) * 100) / 100 };
       });
 
+      // normalize category and splitMethod to avoid backend enum mismatches
+      const allowedCategories = ['food','transportation','accommodation','entertainment','shopping','utilities','healthcare','other'];
+      const clientToServerCategory = {
+        groceries: 'food'
+      };
+
+      const allowedSplitMethods = ['equal','exact','percentage','byItem'];
+      const clientToServerSplit = {
+        byItem: 'byItem'
+      };
+
+      const requestedCategory = expenseData.category || 'other';
+      const category = allowedCategories.includes(requestedCategory) ? requestedCategory : (clientToServerCategory[requestedCategory] || 'other');
+
+      const requestedSplit = expenseData.splitType || 'equal';
+      const splitMethod = allowedSplitMethods.includes(requestedSplit) ? requestedSplit : (clientToServerSplit[requestedSplit] || 'equal');
+
       // build final payload the backend expects
       const payload = {
         description: expenseData.description,
         amount,
-        payer: currentUser.id || currentUser._id,
-        category: expenseData.category || 'other',
-        splitMethod: expenseData.splitType || 'equal',
+        payer: payerId,
+        category,
+        splitMethod,
         participants: participantsWithAmounts,
         notes: expenseData.notes || ''
       };

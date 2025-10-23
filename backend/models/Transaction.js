@@ -33,6 +33,7 @@ const transactionSchema = new mongoose.Schema({
     required: true,
     enum: [
       'food',
+      'groceries',
       'transportation',
       'accommodation',
       'entertainment',
@@ -45,7 +46,7 @@ const transactionSchema = new mongoose.Schema({
   },
   splitMethod: {
     type: String,
-    enum: ['equal', 'exact', 'percentage'],
+    enum: ['equal', 'exact', 'percentage', 'byItem'],
     default: 'equal'
   },
   participants: [{
@@ -243,6 +244,9 @@ transactionSchema.pre('save', function(next) {
     this.calculateEqualSplit();
   } else if (this.splitMethod === 'percentage') {
     this.validatePercentageSplit();
+  } else if (this.splitMethod === 'byItem') {
+    // when items are provided and splitMethod is byItem, items->participants logic above
+    // will populate participants and amounts; no further split validation required here
   }
   
   this.validateParticipantAmounts();

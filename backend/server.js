@@ -24,8 +24,7 @@ const connectDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-  console.log(`MongoDB connected to host: ${conn.connection.host}`);
-  console.log(`Using database: ${conn.connection.db.databaseName}`);
+  console.info(`MongoDB connected: host=${conn.connection.host}, db=${conn.connection.db.databaseName}`);
   } catch (error) {
     console.error('Database connection failed:', error);
     process.exit(1);
@@ -184,10 +183,8 @@ const startServer = async () => {
   await connectDB();
   
   const server = app.listen(PORT, () => {
-    const actualPort = server.address().port;
-    console.log(`Server running in ${process.env.NODE_ENV || 'development'} on port ${actualPort}`);
-    console.log(`Health check available at http://localhost:${actualPort}/health`);
-    console.log(`API base URL: http://localhost:${actualPort}/api`);
+  const actualPort = server.address().port;
+  console.info(`Server running in ${process.env.NODE_ENV || 'development'} on port ${actualPort}`);
   });
 };
 

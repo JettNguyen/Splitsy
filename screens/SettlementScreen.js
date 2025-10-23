@@ -388,8 +388,7 @@ const styles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowRadius: 5,
   },
   summaryTitle: {
     fontSize: 18,
@@ -429,8 +428,7 @@ const styles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 5,
   },
   settlementHeader: {
     flexDirection: 'row',
@@ -574,8 +572,7 @@ const styles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowRadius: 5,
   },
   confirmationTitle: {
     fontSize: 20,

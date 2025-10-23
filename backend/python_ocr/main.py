@@ -11,7 +11,7 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 
 # set tesseract path if needed (windows only)
-pytesseract.pytesseract.tesseract_cmd = "/opt/homebrew/bin/tesseract"
+pytesseract.pytesseract.tesseract_cmd=r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
 
 app = Flask(__name__)
 CORS(app)

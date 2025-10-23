@@ -151,12 +151,12 @@ const NotificationsScreen = ({ visible, onClose }) => {
         ]}
       >
         <SafeAreaView style={styles.safeArea}>
-          {/*drag indicator*/}
+    {/* drag indicator */}
           <View style={styles.dragIndicatorContainer} {...panResponder.panHandlers}>
             <View style={[styles.dragIndicator, { backgroundColor: theme.colors.textTertiary }]} />
           </View>
         
-        {/*header*/}
+  {/* header */}
         <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Text style={[styles.closeButtonText, { color: theme.colors.textSecondary, opacity: 0.7 }]}>Cancel</Text>

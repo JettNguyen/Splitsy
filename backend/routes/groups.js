@@ -16,7 +16,7 @@ const {
 
 const { protect, groupMember, groupAdmin } = require('../middleware/auth');
 
-// Validation rules
+// validation rules
 const createGroupValidation = [
   body('name')
     .trim()
@@ -52,21 +52,21 @@ const addMemberValidation = [
     .withMessage('Valid email is required')
 ];
 
-// All routes require authentication
+// all routes require authentication
 router.use(protect);
 
-// Group routes
+// group routes
 router.get('/', getGroups);
 router.post('/', createGroupValidation, createGroup);
 
-// Routes that require group membership check
+// routes that require group membership check
 router.get('/:id', groupMember, getGroup);
 router.get('/:id/balances', groupMember, getGroupBalances);
 router.post('/:id/leave', groupMember, leaveGroup);
 
-// Routes that require admin privileges
+// routes that require admin privileges
 router.put('/:id', groupMember, groupAdmin, updateGroup);
-router.delete('/:id', groupMember, groupAdmin, deleteGroup);
+router.delete('/:id', groupMember, deleteGroup);  // removed groupadmin - check in controller
 router.post('/:id/members', groupMember, addMemberValidation, addMember);
 router.delete('/:id/members/:userId', groupMember, groupAdmin, removeMember);
 

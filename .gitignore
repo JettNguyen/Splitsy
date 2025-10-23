@@ -159,6 +159,7 @@ local.properties
 README_OLD.md
 
 # node / react native
+**/node_modules/
 node_modules/
 .expo/
 .expo-shared/

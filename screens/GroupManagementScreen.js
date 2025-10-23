@@ -30,7 +30,7 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
   useEffect(() => {
     let mounted = true;
     if (groupId) {
-      // Load transactions and balances for this group when the modal opens.
+  // load transactions and balances for this group when the modal opens
       (async () => {
         try {
           const txResp = await loadTransactions(groupId);
@@ -39,7 +39,7 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
           const balances = await getGroupBalances(groupId);
           if (mounted && balances) setGroupBalances(balances || []);
         } catch (err) {
-          // ignore - DataContext handles errors
+          // ignore - datacontext handles errors
           console.warn('Failed to load group data', err.message || err);
         }
       })();
@@ -111,17 +111,28 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
       return;
     }
 
-    if (group.members.includes(existingUser.id)) {
+    // robustly check membership by id (members may be stored as objects or ids)
+    const alreadyMember = group.members.some(m => {
+      const memberId = m && (m.user?._id || m.user?.id || m._id || m.id || m);
+      return String(memberId) === String(existingUser.id || existingUser._id);
+    });
+
+    if (alreadyMember) {
       Alert.alert('Error', 'User is already a member of this group');
       return;
     }
 
     try {
-      // Use DataContext.addGroupMember which calls POST /groups/:id/members
+      // use datacontext.addGroupMember which calls post /groups/:id/members
       await addGroupMember(groupId, newMemberEmail.trim());
       setNewMemberEmail('');
       setShowAddMember(false);
       Alert.alert('Success', 'Member added successfully');
+      // refresh transactions and balances
+      const txResp = await loadTransactions(groupId);
+      setGroupTransactions(txResp || []);
+      const balances = await getGroupBalances(groupId);
+      setGroupBalances(balances || []);
     } catch (error) {
       Alert.alert('Error', 'Failed to add member');
     }
@@ -277,7 +288,7 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
             </View>
           </View>
 
-          {/* Recent transactions for this group */}
+          {/* recent transactions for this group */}
           <View style={styles.transactionsSection}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Transactions</Text>
             {groupTransactions.length === 0 ? (
@@ -316,9 +327,10 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
             </View>
             
             <View style={styles.membersList}>
-              {group.members.map((memberId) => (
-                <MemberItem key={memberId} memberId={memberId} />
-              ))}
+              {group.members.map((member) => {
+                const memberId = member && (member.user?._id || member.user?.id || member._id || member.id || member);
+                return <MemberItem key={String(memberId)} memberId={memberId} />;
+              })}
             </View>
           </View>
 

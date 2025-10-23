@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-// Screen components
+// screen components
 import AuthScreen from './screens/AuthScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import PaymentMethodsScreen from './screens/PaymentMethodsScreen';
@@ -18,21 +18,22 @@ import ExpenseReportsScreen from './screens/ExpenseReportsScreen';
 import ExpenseForm from './components/ExpenseForm';
 import FriendsScreen from './screens/FriendsScreen';
 import ActivityScreen from './screens/ActivityScreen';
+import apiService from './services/apiService';
 
-// External libraries
+// external libraries
 import { Ionicons } from '@expo/vector-icons';
 
-// Context providers
+// context providers
 import { UserProvider, useUser } from './context/UserContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { DataProvider, useData } from './context/ApiDataContext';
 import { ToastProvider } from './context/ToastContext';
 import { NotificationProvider } from './context/NotificationContext';
 
-// Styles
+// styles
 import AppStyles from './styles/AppStyles';
 
-// Navigation configuration
+// navigation configuration
 const TABS = [
   { id: 'home', icon: 'home', label: 'Home' },
   { id: 'friends', icon: 'people', label: 'Friends' },
@@ -40,7 +41,7 @@ const TABS = [
   { id: 'profile', icon: 'settings', label: 'Settings' }
 ];
 
-// Reusable navigation button component
+// reusable navigation button component
 function NavButton({ tab, activeTab, scaleAnim, theme, onPress }) {
   const isActive = activeTab === tab.id;
   
@@ -69,7 +70,7 @@ function NavButton({ tab, activeTab, scaleAnim, theme, onPress }) {
   );
 }
 
-// Loading screen component
+// loading screen component
 function LoadingScreen({ theme }) {
   return (
     <SafeAreaView style={[AppStyles.container, { backgroundColor: theme.colors.background }]}>
@@ -86,7 +87,7 @@ function LoadingScreen({ theme }) {
   );
 }
 
-// Theme-aware text helper
+// theme-aware text helper
 function ThemedText({ style, color, children, theme }) {
   return (
     <Text style={[style, { color: color || theme.colors.text }]}>
@@ -95,7 +96,7 @@ function ThemedText({ style, color, children, theme }) {
   );
 }
 
-// Balance card component  
+// balance card component
 function BalanceCard({ title, amount, color, icon, theme }) {
   return (
     <View style={[AppStyles.balanceCard, { 
@@ -112,7 +113,7 @@ function BalanceCard({ title, amount, color, icon, theme }) {
         </ThemedText>
       </View>
       <ThemedText style={AppStyles.balanceAmount} color={color} theme={theme}>
-        ${amount}
+        ${Number(amount).toFixed(2)}
       </ThemedText>
     </View>
   );
@@ -132,35 +133,129 @@ function EmptyState({ title, subtitle, theme }) {
   );
 }
 
-function TransactionItem({ transaction, theme }) {
-  const isOwed = transaction.type === 'owed';
+function TransactionItem({ transaction, theme, currentUserId, onSettleTransaction }) {
+  // determine if this user is the payer
+  const payerId = transaction.payer?._id || transaction.payer?.id || transaction.payer;
+  const isPayer = String(payerId) === String(currentUserId);
+  const isOwed = isPayer; // if user is payer, others owe them
   const color = isOwed ? theme.colors.success : theme.colors.error;
+  
+  // find the other user involved
+  let otherUserName = '';
+  if (transaction.group) {
+    // for group transactions, show the group name
+    otherUserName = transaction.group?.name || 'Group';
+  } else {
+    // for friend transactions, show the other person's name
+    if (isPayer) {
+      // current user paid, so show who they lent to
+      const participant = transaction.participants?.find(p => 
+        (p.user?._id || p.user) !== currentUserId
+      );
+      otherUserName = participant?.user?.name || participant?.name || 'Friend';
+    } else {
+      // current user owes, so show who they borrowed from
+      otherUserName = transaction.payer?.name || 'Friend';
+    }
+  }
+
+  // clean up transaction description by removing unnecessary text
+  const cleanDescription = transaction.description
+    ?.replace(/- Friend Transaction$/i, '')
+    ?.replace(/Friend Transaction/i, '')
+    ?.trim() || 'Expense';
+
+  // determine settlement status and text
+  const getStatusInfo = () => {
+    if (transaction.status === 'settled' || transaction.settled) {
+      return {
+        text: 'Settled',
+        icon: '✓',
+        color: '#4CAF50', // green for settled
+        backgroundColor: '#4CAF50' + '20' // 20% opacity
+      };
+    } else {
+      return {
+        text: 'Tap to settle',
+        icon: '○',
+        color: '#FF9800', // orange for pending
+        backgroundColor: '#FF9800' + '15' // 15% opacity
+      };
+    }
+  };
+
+  const statusInfo = getStatusInfo();
+  const canSettle = !transaction.settled && transaction.status !== 'settled';
+
+  const handleStatusPress = () => {
+    if (canSettle) {
+      Alert.alert(
+        'Settle Transaction',
+        `Mark "${cleanDescription}" as settled?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Settle', 
+            style: 'default',
+            onPress: () => onSettleTransaction?.(transaction._id || transaction.id)
+          }
+        ]
+      );
+    }
+  };
   
   return (
     <View style={[AppStyles.transactionCard, { backgroundColor: theme.colors.card }]}>
       <View style={AppStyles.transactionRow}>
-        <View style={[AppStyles.avatar, { backgroundColor: color }]}>
-          <Text style={AppStyles.avatarText}>{transaction.user?.name?.[0] || 'U'}</Text>
+        <View style={[AppStyles.avatar, { backgroundColor: theme.colors.primary }]}>
+          <Text style={AppStyles.avatarText}>{otherUserName?.[0] || 'U'}</Text>
         </View>
         <View style={AppStyles.transactionInfo}>
           <ThemedText style={AppStyles.transactionTitle} theme={theme}>
-            {transaction.description}
+            {cleanDescription}
           </ThemedText>
-          <ThemedText style={AppStyles.transactionSubtitle} color={theme.colors.textSecondary} theme={theme}>
-            {transaction.group?.name || 'Personal'}
+            <ThemedText style={AppStyles.transactionSubtitle} color={theme.colors.textSecondary} theme={theme}>
+            {transaction.group ? 
+              `${otherUserName} • ${isOwed ? 'You lent' : 'You borrowed'}` : 
+              `${isOwed ? `${otherUserName} owes you` : `You owe ${otherUserName}`}`
+            }
           </ThemedText>
         </View>
         <View style={AppStyles.transactionAmount}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <ThemedText style={AppStyles.amount} color={color} theme={theme}>
-            ${transaction.amount}
+            {(() => {
+              // prefer explicit participant amount for current user; fallback to equal split
+              try {
+                const uid = currentUserId;
+                if (!transaction || !transaction.participants || !Array.isArray(transaction.participants)) {
+                  return `${isOwed ? '+' : '-'}$${Number(transaction.amount || 0).toFixed(2)}`;
+                }
+                const participant = transaction.participants.find(p => {
+                  const pid = p && (p.user?._id || p.user?.id || (typeof p.user === 'string' ? p.user : null) || p._id || p.id);
+                  return String(pid) === String(uid);
+                });
+
+                const amountToShow = participant && typeof participant.amount === 'number'
+                  ? participant.amount
+                  : (transaction.participants.length ? (Number(transaction.amount || 0) / transaction.participants.length) : Number(transaction.amount || 0));
+
+                return `${isOwed ? '+' : '-'}$${Number(amountToShow || 0).toFixed(2)}`;
+              } catch (e) {
+                return `${isOwed ? '+' : '-'}$${Number(transaction.amount || 0).toFixed(2)}`;
+              }
+            })()}
           </ThemedText>
-          <View style={[AppStyles.status, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[
-              AppStyles.statusText, 
-              { color: transaction.settled ? theme.colors.success : theme.colors.textSecondary }
-            ]}>
-              {transaction.settled ? '✓' : '○'}
-            </Text>
+            <TouchableOpacity 
+              style={[AppStyles.statusCircle, { 
+                backgroundColor: statusInfo.color,
+                opacity: canSettle ? 1 : 0.7
+              }]}
+              onPress={handleStatusPress}
+              disabled={!canSettle}
+            >
+              {/* empty circle with just color indication */}
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -168,7 +263,65 @@ function TransactionItem({ transaction, theme }) {
   );
 }
 
-function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpense, currentUser }) {
+function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpense, currentUser, fetchUserBalances }) {
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const handleSettleTransaction = async (transactionId) => {
+    try {
+      const result = await apiService.markTransactionPaid(transactionId, currentUser.id, true);
+      
+      if (result.success) {
+        // update the local state to reflect the settlement
+        setRecentActivity(prev => 
+          prev.map(transaction => 
+            (transaction._id || transaction.id) === transactionId 
+              ? { ...transaction, status: 'settled', settled: true }
+              : transaction
+          )
+        );
+        
+        // refresh user balances to reflect the settlement
+        if (fetchUserBalances) {
+          await fetchUserBalances();
+        }
+        
+        Alert.alert('Success', 'Transaction marked as settled!');
+      } else {
+        Alert.alert('Error', result.message || 'Failed to settle transaction');
+      }
+    } catch (error) {
+      console.error('Error settling transaction:', error);
+      Alert.alert('Error', 'Failed to settle transaction');
+    }
+  };
+
+  useEffect(() => {
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true);
+
+      const result = await apiService.getUsersTransactions(currentUser.id);
+
+      if (!result?.success) {
+        throw new Error(result?.message || 'Failed to fetch transactions');
+      }
+
+      setRecentActivity(result.data || []);
+    } catch (err) {
+      console.error('APP.JS Error fetching transactions:', err);
+      setError(err.message || 'Error fetching transactions');
+    } finally {
+      setLoading(false);
+}
+  };
+
+  if (currentUser?.id || currentUser?._id) {
+    fetchTransactions();
+  }
+}, [currentUser?.id, currentUser?._id]);
+
   return (
     <ScrollView 
       style={AppStyles.content} 
@@ -198,34 +351,27 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
         />
       </View>
 
-      <View style={[AppStyles.netBalance, { backgroundColor: theme.colors.card }]}>
-        <ThemedText style={AppStyles.netLabel} color={theme.colors.textSecondary} theme={theme}>
-          Net Balance
-        </ThemedText>
-        <ThemedText 
-          style={AppStyles.netAmount}
-          color={balance.net >= 0 ? theme.colors.success : theme.colors.error}
-          theme={theme}
-        >
-          ${Math.abs(balance.net).toFixed(2)}
-        </ThemedText>
-      </View>
-
       <View style={AppStyles.section}>
         <ThemedText style={AppStyles.sectionTitle} theme={theme}>Recent Activity</ThemedText>
         
-        {userTransactions.length === 0 ? (
+        {loading ? (
+          <ThemedText theme={theme}>Loading...</ThemedText>
+        ) : error ? (
+          <ThemedText color={theme.colors.error} theme={theme}>{error}</ThemedText>
+        ) : recentActivity.length === 0 ? (
           <EmptyState 
             title="No transactions yet" 
             subtitle="Add an expense to get started"
             theme={theme}
           />
         ) : (
-          userTransactions.slice(0, 5).map((transaction, index) => (
+          recentActivity.slice(0, 5).map((transaction) => (
             <TransactionItem 
-              key={index} 
+              key={transaction._id || transaction.id} 
               transaction={transaction} 
-              theme={theme} 
+              theme={theme}
+              currentUserId={currentUser?.id || currentUser?._id}
+              onSettleTransaction={handleSettleTransaction}
             />
           ))
         )}
@@ -258,9 +404,9 @@ function NavigationBar({ activeTab, onTabPress, onAddExpense, theme }) {
   
   return (
     <View style={AppStyles.navContainer}>
-      {/* Navigation Bar */}
+      {/* navigation bar */}
       <View style={[AppStyles.bottomNav, { backgroundColor: theme.colors.card }]}>
-        {/* Left Tabs */}
+        {/* left tabs */}
         <View style={AppStyles.sideButtons}>
           {firstHalf.map(tab => (
             <NavButton 
@@ -274,7 +420,7 @@ function NavigationBar({ activeTab, onTabPress, onAddExpense, theme }) {
           ))}
         </View>
         
-        {/* Center Add Button - Prominent Purple Circle */}
+        {/* center add button - prominent purple circle */}
         <View style={AppStyles.centerSpace}>
           <TouchableOpacity
             style={[
@@ -294,7 +440,7 @@ function NavigationBar({ activeTab, onTabPress, onAddExpense, theme }) {
           </TouchableOpacity>
         </View>
         
-        {/* Right Tabs */}
+        {/* right tabs */}
         <View style={AppStyles.sideButtons}>
           {secondHalf.map(tab => (
             <NavButton 
@@ -312,7 +458,7 @@ function NavigationBar({ activeTab, onTabPress, onAddExpense, theme }) {
   );
 }
 
-// Modal state management helper
+// modal state management helper
 function useModalState(initialState = false) {
   const [isVisible, setIsVisible] = useState(initialState);
   return [isVisible, () => setIsVisible(true), () => setIsVisible(false)];
@@ -321,7 +467,7 @@ function useModalState(initialState = false) {
 function MainApp() {
   const { theme, isLoading: themeLoading } = useTheme();
   const { currentUser, isAuthenticated, userLoading } = useUser();
-  const { groups, getUserGroups, getUserTransactions, calculateUserBalance, dataLoading, createTransaction } = useData();
+  const { groups, getUserGroups, getUserTransactions, calculateUserBalance, dataLoading, createTransaction, userBalances, fetchUserBalances } = useData();
   
   const [activeTab, setActiveTab] = useState('home');
   const [showAddExpense, showAddExpenseModal, hideAddExpenseModal] = useModalState();
@@ -339,18 +485,35 @@ function MainApp() {
 
   const userGroups = getUserGroups() || [];
   const userTransactions = getUserTransactions() || [];
-  const balance = calculateUserBalance() || { owed: 0, owes: 0, net: 0 };
+  // prefer backend-computed balances when available (userbalances comes from /api/transactions/user/balances)
+  let balance;
+  
+  if (userBalances && userBalances.summary) {
+    balance = {
+      owed: userBalances.summary.totalOwedToMe || 0,
+      owes: userBalances.summary.totalIOwe || 0,
+      net: userBalances.summary.netBalance || 0
+    };
+  } else {
+    const rawBalance = calculateUserBalance() || { owed: 0, owes: 0, net: 0 };
+    balance = {
+      owed: rawBalance.owed || 0,
+      owes: rawBalance.owes || 0,
+      net: rawBalance.net || 0
+    };
+  }
 
-  // Called when the Add Expense form is submitted.
-  // Transforms UI form data into the backend transaction payload and submits it.
+
+  // called when the add expense form is submitted.
+  // transforms ui form data into the backend transaction payload and submits it.
   const addExpense = async (expenseData) => {
     try {
-      // Transform the expenseData into API payload
+      // transform the expensedata into api payload
       const amount = parseFloat(expenseData.amount);
       // normalize participants: they might be ids or objects; ensure { user } shape
       const participants = (expenseData.participants || []).map(id => ({ user: id }));
 
-      // For now, do equal split calculation
+      // for now, do equal split calculation
       const perPerson = Math.round((amount / participants.length) * 100) / 100;
       let remaining = Math.round((amount - perPerson * participants.length) * 100) / 100;
       const participantsWithAmounts = participants.map((p, idx) => {
@@ -358,22 +521,36 @@ function MainApp() {
         return { user: p.user, amount: Math.round((perPerson + adj) * 100) / 100 };
       });
 
-      // Build final payload the backend expects
+      // build final payload the backend expects
       const payload = {
         description: expenseData.description,
         amount,
-        group: expenseData.groupId,
         payer: currentUser.id || currentUser._id,
         category: expenseData.category || 'other',
         splitMethod: expenseData.splitType || 'equal',
         participants: participantsWithAmounts,
         notes: expenseData.notes || ''
       };
+     if (expenseData.groupId) {
+        payload.group = expenseData.groupId;
+      }
 
-  await createTransaction(payload);
+      await createTransaction(payload);
+      await getUserTransactions();
+      // refresh server-side computed balances and update the context
+      await fetchUserBalances();
+      
+      if(expenseData.groupId) {
+        const txResp = await apiService.getTransactions(expenseData.groupId);
+        // setgrouptransactions(txresp || []); this does not even exist, only works when commented out
+        const balances = await apiService.getGroupBalances(expenseData.groupId);
+        // setgroupbalances(balances || []); this does not exist either, only works when commented out
+      }
+
   hideAddExpenseModal();
       Alert.alert('Success', 'Expense added successfully');
     } catch (error) {
+    console.error('Failed to add expense:', error && (error.message || error));
       Alert.alert('Error', 'Failed to add expense');
     }
   };
@@ -389,6 +566,7 @@ function MainApp() {
             balance={balance}
             onAddExpense={() => setShowAddExpense(true)}
             currentUser={currentUser}
+            fetchUserBalances={fetchUserBalances}
           />
         );
       case 'friends':
@@ -396,13 +574,17 @@ function MainApp() {
           <FriendsScreen
             theme={theme}
             currentUser={currentUser}
-            userFriends={[]} // Friends integration ready for backend API
-            userGroups={userGroups} // Use existing groups data
+            userFriends={[]} // friends integration ready for backend api
+            userGroups={userGroups} // use existing groups data
           />
         );
       case 'activity':
         return (
-          <ActivityScreen />
+          <ActivityScreen 
+          userTransactions={userTransactions} 
+          userGroups={userGroups} 
+          userBalances={balance}
+        />
         );
       case 'profile':
         return (
@@ -438,7 +620,7 @@ function MainApp() {
         />
       </View>
 
-      {/* Modal screens */}
+      {/* modal screens */}
       <ExpenseForm
         visible={showAddExpense}
         onClose={hideAddExpenseModal}

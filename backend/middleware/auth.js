@@ -1,12 +1,12 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Protect routes - verify JWT token
+// protect routes - verify jwt token
 const protect = async (req, res, next) => {
   try {
     let token;
 
-    // Check for token in header
+    // check for token in header
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
@@ -19,10 +19,10 @@ const protect = async (req, res, next) => {
     }
 
     try {
-      // Verify token
+      // verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
-      // Get user from database
+      // get user from database
       const user = await User.findById(decoded.id).select('-password');
       
       if (!user) {
@@ -32,10 +32,10 @@ const protect = async (req, res, next) => {
         });
       }
 
-      // Update last active
+      // update last active
       user.updateLastActive();
       
-      // Add user to request object
+      // add user to request object
       req.user = user;
       next();
     } catch (error) {
@@ -54,7 +54,7 @@ const protect = async (req, res, next) => {
   }
 };
 
-// Check if user is group member
+// check if user is group member
 const groupMember = async (req, res, next) => {
   try {
     const Group = require('../models/Group');
@@ -96,10 +96,10 @@ const groupMember = async (req, res, next) => {
   }
 };
 
-// Check if user is group admin
+// check if user is group admin
 const groupAdmin = async (req, res, next) => {
   try {
-    // First check if user is a member
+    // first check if user is a member
     if (!req.group) {
       return res.status(400).json({
         success: false,

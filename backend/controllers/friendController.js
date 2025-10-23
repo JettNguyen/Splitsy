@@ -1,26 +1,132 @@
 const User = require('../models/User');
 const FriendRequest = require('../models/FriendRequest');
+const mongoose = require('mongoose');
 
-// Send friend request
+// friend controller: manage friend relationships, requests, and helpers
+// keep responses minimal and avoid leaking sensitive data
+exports.addFriend = async (req, res) => {
+  try {
+    const UserModel = require('../models/User');
+    const { email } = req.body;
+
+    const friend = await UserModel.findOne({ email });
+    if (!friend) return res.status(404).json({ success: false, message: 'Friend not found' });
+
+    const user = await UserModel.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+  if (user.friends.includes(friend._id)) return res.status(400).json({ success: false, message: 'Already friends' });
+
+  // add friend to current user's friends list
+    user.friends.push(friend._id);
+    await user.save();
+
+    // add user to the friends list as well
+    friend.friends.push(user._id);
+    await friend.save();
+
+    const populatedUser = await UserModel.findById(user._id).populate('friends', 'name email avatar');
+    res.json({ success: true, message: 'Friend added successfully', user: populatedUser });
+  } catch (error) {
+    console.error('Add friend error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// get friends list to display on the frontend
+exports.getFriends = async (req, res) => {
+  try {
+    const UserModel = require('../models/User');
+    const user = await UserModel.findById(req.user._id).populate('friends', 'name email avatar');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    res.json({ success: true, friends: user.friends });
+  } catch (error) {
+    console.error('Get friends error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// remove/unfriend - remove a friend from both users' friend arrays
+exports.removeFriend = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const friendId = req.params?.friendId;
+
+    if (!userId || !friendId) {
+      return res.status(400).json({ success: false, message: 'Missing user or friend ID' });
+    }
+
+    if (userId === friendId) {
+      return res.status(400).json({ success: false, message: 'Cannot remove yourself' });
+    }
+
+    // validate that friendId is a valid mongodb object id
+    if (!mongoose.Types.ObjectId.isValid(friendId)) {
+      return res.status(400).json({ success: false, message: 'Invalid friend ID' });
+    }
+
+    // use the string directly or convert with 'new'
+    await User.findByIdAndUpdate(userId, { $pull: { friends: friendId } });
+    await User.findByIdAndUpdate(friendId, { $pull: { friends: userId } });
+
+    const updatedUser = await User.findById(userId).populate('friends', 'name email avatar');
+    res.json({ success: true, message: 'Friend removed successfully', friends: updatedUser.friends });
+  } catch (err) {
+    console.error('Remove friend error:', err);
+    res.status(500).json({ success: false, message: 'server controller error' });
+  }
+};
+
+// debug helper: return the authenticated user's id and populated friends
+
+
+// get a friend's public payment methods by user id
+exports.getFriendPaymentMethods = async (req, res) => {
+  try {
+  // minimal debug output; avoid printing tokens or full headers in production
+    if ((process.env.NODE_ENV || 'development') === 'development') {
+      const authHeader = req.headers.authorization || '';
+      const tokenPreview = authHeader.startsWith('Bearer ') ? `${authHeader.slice(0, 20)}...` : authHeader;
+      console.debug && console.debug('[getFriendPaymentMethods] incoming:', { method: req.method, url: req.originalUrl, authPresent: !!authHeader, tokenPreview });
+    }
+    const friendId = req.params.friendId;
+    if (!friendId) return res.status(400).json({ success: false, message: 'Missing friend id' });
+
+    const friend = await User.findById(friendId).select('paymentMethods name email');
+    if (!friend) return res.status(404).json({ success: false, message: 'Friend not found' });
+
+  // only expose non-sensitive fields (id, type, handle, isDefault)
+    const methods = (friend.paymentMethods || []).map(m => ({ id: m._id, type: m.type, handle: m.handle, isDefault: m.isDefault }));
+    return res.json({ success: true, data: { user: { id: friend._id, name: friend.name, email: friend.email }, paymentMethods: methods } });
+  } catch (err) {
+    console.error('Get friend payment methods error:', err);
+    return res.status(500).json({ success: false, message: 'server error' });
+  }
+};
+
+
+// friend request endpoints
+
+// send a friend request
 exports.sendRequest = async (req, res, next) => {
   try {
     const fromId = req.user && req.user.id; // assuming auth middleware sets req.user
     const { toId, message } = req.body;
 
-    if (!fromId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    if (!toId) return res.status(400).json({ success: false, message: 'Missing toId' });
-    if (fromId === toId) return res.status(400).json({ success: false, message: 'Cannot friend yourself' });
+  if (!fromId) return res.status(401).json({ success: false, message: 'unauthorized' });
+  if (!toId) return res.status(400).json({ success: false, message: 'missing toId' });
+  if (fromId === toId) return res.status(400).json({ success: false, message: 'cannot friend yourself' });
 
-    // Ensure recipient exists
+  // ensure the recipient exists
     const recipient = await User.findById(toId);
     if (!recipient) return res.status(404).json({ success: false, message: 'User not found' });
 
-    // Prevent duplicate requests or already friends
+  // prevent duplicate requests or if already friends
     const existingFriend = await User.findOne({ _id: fromId, friends: toId });
-    if (existingFriend) return res.status(400).json({ success: false, message: 'Already friends' });
+    if (existingFriend) return res.status(400).json({ success: false, message: 'already friends' });
 
     const existingRequest = await FriendRequest.findOne({ from: fromId, to: toId });
-    if (existingRequest) return res.status(400).json({ success: false, message: 'Request already sent' });
+    if (existingRequest) return res.status(400).json({ success: false, message: 'request already sent' });
 
     const fr = await FriendRequest.create({ from: fromId, to: toId, message: message || '' });
     res.status(201).json({ success: true, request: fr });
@@ -29,7 +135,7 @@ exports.sendRequest = async (req, res, next) => {
   }
 };
 
-// List incoming and outgoing requests
+// list incoming and outgoing requests
 exports.listRequests = async (req, res, next) => {
   try {
     const userId = req.user && req.user.id;
@@ -44,7 +150,7 @@ exports.listRequests = async (req, res, next) => {
   }
 };
 
-// Accept request
+// accept a friend request
 exports.acceptRequest = async (req, res, next) => {
   try {
     const userId = req.user && req.user.id;
@@ -57,7 +163,7 @@ exports.acceptRequest = async (req, res, next) => {
 
     if (request.status !== 'pending') return res.status(400).json({ success: false, message: 'Request already handled' });
 
-    // Add each other as friends
+  // add each other as friends
     await User.findByIdAndUpdate(userId, { $addToSet: { friends: request.from } });
     await User.findByIdAndUpdate(request.from, { $addToSet: { friends: request.to } });
 
@@ -70,7 +176,7 @@ exports.acceptRequest = async (req, res, next) => {
   }
 };
 
-// Decline or cancel request
+// decline or cancel a friend request
 exports.declineRequest = async (req, res, next) => {
   try {
     const userId = req.user && req.user.id;
@@ -80,7 +186,7 @@ exports.declineRequest = async (req, res, next) => {
     const request = await FriendRequest.findById(requestId);
     if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
 
-    // Only sender or recipient can cancel/decline
+    // only sender or recipient can cancel/decline
     if (request.from.toString() !== userId.toString() && request.to.toString() !== userId.toString()) {
       return res.status(403).json({ success: false, message: 'Not allowed' });
     }
@@ -91,129 +197,5 @@ exports.declineRequest = async (req, res, next) => {
     res.json({ success: true, message: 'Friend request declined' });
   } catch (error) {
     next(error);
-  }
-};
-// Additional simple helpers: add friend directly (legacy endpoint)
-exports.addFriend = async (req, res) => {
-  try {
-    const UserModel = require('../models/User');
-    const { email } = req.body;
-
-    const friend = await UserModel.findOne({ email });
-    if (!friend) return res.status(404).json({ success: false, message: 'Friend not found' });
-
-    const user = await UserModel.findById(req.user._id);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-    if (user.friends.includes(friend._id)) return res.status(400).json({ success: false, message: 'Already friends' });
-
-    user.friends.push(friend._id);
-    await user.save();
-
-    const populatedUser = await UserModel.findById(user._id).populate('friends', 'name email avatar');
-    res.json({ success: true, message: 'Friend added successfully', user: populatedUser });
-  } catch (error) {
-    console.error('Add friend error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
-
-exports.getFriends = async (req, res) => {
-  try {
-    const UserModel = require('../models/User');
-    const user = await UserModel.findById(req.user._id).populate('friends', 'name email avatar');
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    res.json({ success: true, friends: user.friends });
-  } catch (error) {
-    console.error('Get friends error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
-
-// Remove/unfriend - remove friend from both users' friends arrays
-exports.removeFriend = async (req, res) => {
-  try {
-    const userId = req.user && req.user.id;
-    const friendIdParam = req.params && req.params.friendId;
-    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    if (!friendIdParam) return res.status(400).json({ success: false, message: 'Missing friendId' });
-    // basic self-check (only meaningful if client passed an id)
-    if (userId.toString() === friendIdParam.toString()) return res.status(400).json({ success: false, message: 'Cannot remove yourself' });
-
-    const UserModel = require('../models/User');
-    console.log(`Remove friend request: requester=${userId} friendIdParam=${friendIdParam}`);
-
-    // Load requester to inspect their friends array
-    const requester = await UserModel.findById(userId).exec();
-    if (!requester) return res.status(404).json({ success: false, message: 'Requesting user not found' });
-    console.log('Requester friends (raw):', requester.friends);
-
-    // We'll resolve the friend document and the ObjectId we'll use for updates
-    let friend = null;
-    let friendIdToUse = null;
-
-    // If the client passed an email (contains @), do a case-insensitive email lookup
-    if (typeof friendIdParam === 'string' && friendIdParam.includes('@')) {
-      // escape user input for regex
-      const esc = (s) => s.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-      const emailRegex = new RegExp(`^${esc(friendIdParam)}$`, 'i');
-      const friendByEmail = await UserModel.findOne({ email: { $regex: emailRegex } });
-      if (!friendByEmail) {
-        console.log('No user found by email lookup for:', friendIdParam);
-        return res.status(404).json({ success: false, message: 'Friend not found by id or email' });
-      }
-      // ensure this user is actually in requester's friends
-      const isFriendByEmail = requester.friends.some(f => f.toString() === friendByEmail._id.toString());
-      if (!isFriendByEmail) {
-        console.log('User found by email but not present in requester.friends:', friendByEmail._id);
-        return res.status(400).json({ success: false, message: 'The specified user is not in your friends list' });
-      }
-      friend = friendByEmail;
-      friendIdToUse = friend._id;
-    } else {
-      // treat the param as an ObjectId string
-      friendIdToUse = friendIdParam;
-      // check membership
-      const isFriendDirect = requester.friends.some(f => f.toString() === friendIdToUse.toString());
-      if (!isFriendDirect) {
-        console.log('Friend id not present in requester.friends:', friendIdToUse);
-        return res.status(400).json({ success: false, message: 'The specified user is not in your friends list' });
-      }
-      try {
-        friend = await UserModel.findById(friendIdToUse);
-      } catch (e) {
-        console.warn('findById failed for friendId even though present in requester.friends', friendIdToUse, e);
-        return res.status(500).json({ success: false, message: 'Server error looking up friend' });
-      }
-      if (!friend) {
-        console.log('Referenced friend document missing for id:', friendIdToUse);
-        return res.status(404).json({ success: false, message: 'Friend document not found despite being referenced' });
-      }
-    }
-
-    // Remove each other from friends arrays using the resolved ObjectId
-    await UserModel.findByIdAndUpdate(userId, { $pull: { friends: friendIdToUse } });
-    await UserModel.findByIdAndUpdate(friendIdToUse, { $pull: { friends: userId } });
-
-    // Return updated friends list for the requester
-    const updatedUser = await UserModel.findById(userId).populate('friends', 'name email avatar');
-    res.json({ success: true, message: 'Friend removed successfully', friends: updatedUser.friends });
-  } catch (error) {
-    console.error('Remove friend error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
-
-// Debug helper: return the authenticated user's id and populated friends
-exports.debugUser = async (req, res) => {
-  try {
-    const UserModel = require('../models/User');
-    if (!req.user || !req.user._id) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const user = await UserModel.findById(req.user._id).populate('friends', 'name email _id');
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    res.json({ success: true, user: { id: user._id, name: user.name, email: user.email, friends: user.friends } });
-  } catch (error) {
-    console.error('Debug user error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

@@ -2,19 +2,19 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 
-// Generate JWT Token
+// generate jwt token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '30d',
   });
 };
 
-// @desc    Register new user
+// @desc    register new user
 // @route   POST /api/auth/register
-// @access  Public
+// @access  public
 const register = async (req, res) => {
   try {
-    // Check for validation errors
+  // check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -26,7 +26,7 @@ const register = async (req, res) => {
 
     const { name, email, password } = req.body;
 
-    // Check if user exists
+  // check if a user with this email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -35,17 +35,17 @@ const register = async (req, res) => {
       });
     }
 
-    // Create user
+  // create the user
     const user = await User.create({
       name,
       email,
       password
     });
 
-    // Generate token
+  // generate jwt token for the new user
     const token = generateToken(user._id);
 
-    // Remove password from response
+  // remove password from the returned object
     const userResponse = user.toObject();
     delete userResponse.password;
 
@@ -73,12 +73,12 @@ const register = async (req, res) => {
   }
 };
 
-// @desc    Login user
+// @desc    login user
 // @route   POST /api/auth/login
-// @access  Public
+// @access  public
 const login = async (req, res) => {
   try {
-    // Check for validation errors
+  // check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -90,7 +90,7 @@ const login = async (req, res) => {
 
     const { email, password } = req.body;
 
-    // Check for user with password field included
+  // fetch user including password for verification
     const user = await User.findOne({ email }).select('+password');
     
     if (!user) {
@@ -100,7 +100,7 @@ const login = async (req, res) => {
       });
     }
 
-    // Check password
+  // verify password
     const isMatch = await user.matchPassword(password);
     
     if (!isMatch) {
@@ -110,13 +110,13 @@ const login = async (req, res) => {
       });
     }
 
-    // Generate token
+  // generate jwt token
     const token = generateToken(user._id);
 
-    // Update last active
+  // update the user's last active timestamp
     user.updateLastActive();
 
-    // Remove password from response
+  // remove password from the returned user object
     const userResponse = user.toObject();
     delete userResponse.password;
 
@@ -136,9 +136,9 @@ const login = async (req, res) => {
   }
 };
 
-// @desc    Get current logged in user
+// @desc    get the current logged-in user
 // @route   GET /api/auth/me
-// @access  Private
+// @access  private
 const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -156,9 +156,9 @@ const getMe = async (req, res) => {
   }
 };
 
-// @desc    Update user details
+// @desc    update user details
 // @route   PUT /api/auth/me
-// @access  Private
+// @access  private
 const updateDetails = async (req, res) => {
   try {
     const fieldsToUpdate = {
@@ -168,7 +168,7 @@ const updateDetails = async (req, res) => {
       avatar: req.body.avatar
     };
 
-    // Remove undefined fields
+  // remove undefined fields before updating the db
     Object.keys(fieldsToUpdate).forEach(key => {
       if (fieldsToUpdate[key] === undefined) {
         delete fieldsToUpdate[key];
@@ -199,12 +199,12 @@ const updateDetails = async (req, res) => {
   }
 };
 
-// @desc    Update password
+// @desc    update password
 // @route   PUT /api/auth/updatepassword
-// @access  Private
+// @access  private
 const updatePassword = async (req, res) => {
   try {
-    // Check for validation errors
+  // check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -216,7 +216,7 @@ const updatePassword = async (req, res) => {
 
     const user = await User.findById(req.user._id).select('+password');
 
-    // Check current password
+  // verify the current password
     if (!(await user.matchPassword(req.body.currentPassword))) {
       return res.status(401).json({
         success: false,
@@ -244,23 +244,23 @@ const updatePassword = async (req, res) => {
   }
 };
 
-// @desc    Add payment method
+// @desc    add payment method
 // @route   POST /api/auth/payment-methods
-// @access  Private
+// @access  private
 const addPaymentMethod = async (req, res) => {
   try {
     const { type, handle, isDefault } = req.body;
 
     const user = await User.findById(req.user._id);
 
-    // If this is set as default, remove default from others
+  // if this is marked default, clear the default flag on the other methods
     if (isDefault) {
       user.paymentMethods.forEach(method => {
         method.isDefault = false;
       });
     }
 
-    // Check if this payment method already exists
+  // check if this payment method already exists for this user
     const existingMethod = user.paymentMethods.find(
       method => method.type === type && method.handle === handle
     );
@@ -290,9 +290,9 @@ const addPaymentMethod = async (req, res) => {
   }
 };
 
-// @desc    Remove payment method
+// @desc    remove payment method
 // @route   DELETE /api/auth/payment-methods/:methodId
-// @access  Private
+// @access  private
 const removePaymentMethod = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -326,12 +326,26 @@ const removePaymentMethod = async (req, res) => {
   }
 };
 
-module.exports = {
-  register,
-  login,
-  getMe,
-  updateDetails,
-  updatePassword,
-  addPaymentMethod,
-  removePaymentMethod
-};
+  // get payment methods for the authenticated user
+  const getPaymentMethods = async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id).select('paymentMethods');
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+      return res.json({ success: true, data: { paymentMethods: user.paymentMethods || [] } });
+    } catch (error) {
+      console.error('Get payment methods error:', error);
+      res.status(500).json({ success: false, message: 'Server error getting payment methods' });
+    }
+  };
+
+  module.exports = {
+    register,
+    login,
+    getMe,
+    updateDetails,
+    updatePassword,
+    addPaymentMethod,
+    removePaymentMethod,
+    getPaymentMethods
+  };

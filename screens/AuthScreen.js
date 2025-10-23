@@ -12,21 +12,21 @@ import {
   Platform
 } from 'react-native';
 
-//context imports
+// context imports
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
 
-//authentication screen component handles login and registration
+// authentication screen — handles login and registration
 const AuthScreen = () => {
   const { theme } = useTheme();
   const { registerUser, loginUser } = useUser();
   
-  //ui state
+  // ui state (flags)
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   
-  //form data state
+  // form data state (inputs)
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -34,12 +34,12 @@ const AuthScreen = () => {
     confirmPassword: ''
   });
 
-  //helper function to update form fields
+  // helper: update form fields
   const updateForm = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
-  //form validation with error messages
+  // form validation (returns error message or null)
   const validateForm = () => {
     if (!form.email.trim()) return 'Please enter an email';
     if (!form.password.trim()) return 'Please enter a password';

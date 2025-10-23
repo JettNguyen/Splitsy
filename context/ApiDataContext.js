@@ -382,7 +382,6 @@ export const DataProvider = ({ children }) => {
   };
 
   const getUserTransactions = () => {
-    console.log('Calculating user transactions for user:', currentUser);
     if (!currentUser) return [];
     return transactions.filter(transaction =>
       transaction.payer._id === currentUser.id ||

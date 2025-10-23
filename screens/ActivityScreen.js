@@ -30,11 +30,11 @@ const ActivityScreen = () => {
 
 useEffect(() => {
   fetchUserBalances(); 
-}, [userTransactions]); // also run when transactions change
+}, [userTransactions?.length]); // also run when transaction count changes
 
 
   const getFilteredActivity = () => {
-    console.log('User Transactions:', userTransactions);
+    // console.log('User Transactions:', userTransactions);
     let activities = [...(userTransactions || [])];
     
     activities.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));

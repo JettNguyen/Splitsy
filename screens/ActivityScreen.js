@@ -333,8 +333,7 @@ const ActivityScreen = () => {
           height: 0,
         },
         shadowOpacity: 0.5,
-        shadowRadius: 12,
-        elevation: 5,
+        shadowRadius: 3,
       },
       filterButton: {
         flex: 1,
@@ -358,9 +357,8 @@ const ActivityScreen = () => {
         borderWidth: 0.5,
         shadowColor: '#673e9dff',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 3,
+        shadowOpacity: 0.5,
+        shadowRadius: 3,
       },
       activityIcon: {
         width: 44,

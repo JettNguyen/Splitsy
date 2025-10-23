@@ -469,6 +469,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   methodCard: {
+    paddingTop: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -476,6 +477,13 @@ const styles = StyleSheet.create({
     marginVertical: 5,
     borderRadius: 12,
     borderWidth: 1,
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 2,
   },
   methodInfo: {
     flexDirection: 'row',
@@ -560,6 +568,13 @@ const styles = StyleSheet.create({
     padding: 15,
     borderWidth: 1,
     marginBottom: Platform.OS === 'ios' ? 40 : 24,
+    shadowColor: '#673e9dff',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
   },
   addFormHeader: {
     flexDirection: 'row',

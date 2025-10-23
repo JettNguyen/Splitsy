@@ -345,7 +345,9 @@ class ApiService {
   // the backend settle endpoint expects { userid?, paid?, paymentmethod? }.
   // we keep this method simple and explicit so callers can pass the user being marked.
   async markTransactionPaid(transactionId, userId = null, paid = true, paymentMethod = null) {
-    const body = { paymentMethod };
+    // backend expects paymentMethodId in the body when provided
+    const body = {};
+    if (paymentMethod) body.paymentMethodId = paymentMethod;
     if (userId) body.userId = userId;
     body.paid = paid;
 

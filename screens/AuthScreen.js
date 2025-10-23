@@ -257,8 +257,7 @@ const styles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowRadius: 5,
   },
   formTitle: {
     fontSize: 24,

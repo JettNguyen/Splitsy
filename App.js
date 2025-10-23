@@ -16,8 +16,10 @@ import PaymentMethodsScreen from './screens/PaymentMethodsScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import ExpenseReportsScreen from './screens/ExpenseReportsScreen';
 import ExpenseForm from './components/ExpenseForm';
+import BalanceDetailsModal from './components/BalanceDetailsModal';
 import FriendsScreen from './screens/FriendsScreen';
 import ActivityScreen from './screens/ActivityScreen';
+import GroupManagementScreen from './screens/GroupManagementScreen';
 import apiService from './services/apiService';
 
 // external libraries
@@ -133,7 +135,9 @@ function EmptyState({ title, subtitle, theme }) {
   );
 }
 
-function TransactionItem({ transaction, theme, currentUserId, onSettleTransaction }) {
+function TransactionItem(props) {
+  const { transaction, theme, currentUserId, onSettleTransaction } = props || {};
+  const groups = (props && props.groups) || [];
   // determine if this user is the payer
   const payerId = transaction.payer?._id || transaction.payer?.id || transaction.payer;
   const isPayer = String(payerId) === String(currentUserId);
@@ -143,8 +147,14 @@ function TransactionItem({ transaction, theme, currentUserId, onSettleTransactio
   // find the other user involved
   let otherUserName = '';
   if (transaction.group) {
-    // for group transactions, show the group name
-    otherUserName = transaction.group?.name || 'Group';
+    // for group transactions, try to show the group name.
+    // transaction.group may be either an object (populated) or an id string.
+    if (typeof transaction.group === 'string' || typeof transaction.group === 'number') {
+      const grp = groups.find(g => String(g._id || g.id) === String(transaction.group));
+      otherUserName = grp?.name || 'Group';
+    } else {
+      otherUserName = transaction.group?.name || transaction.group?.groupName || 'Group';
+    }
   } else {
     // for friend transactions, show the other person's name
     if (isPayer) {
@@ -267,6 +277,8 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [balanceModalTransactions, setBalanceModalTransactions] = useState([]);
   
   const handleSettleTransaction = async (transactionId) => {
     try {
@@ -335,20 +347,49 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
       </View>
 
       <View style={AppStyles.balanceGrid}>
-        <BalanceCard 
-          title="You're owed" 
-          amount={balance.owed} 
-          color={theme.colors.success}
-          icon="↑"
-          theme={theme}
-        />
-        <BalanceCard 
-          title="You owe" 
-          amount={balance.owes} 
-          color={theme.colors.error}
-          icon="↓"
-          theme={theme}
-        />
+        <TouchableOpacity style={AppStyles.balanceCell} onPress={() => {
+          // open modal showing transactions where user is payer (others owe)
+          const uid = currentUser?.id || currentUser?._id;
+          const txs = (recentActivity || []).filter(tx => {
+            try {
+              const payerId = tx.payer?._id || tx.payer?.id || tx.payer;
+              return String(payerId) === String(uid);
+            } catch (e) { return false; }
+          });
+          setBalanceModalTransactions(txs);
+          setShowBalanceModal(true);
+        }}>
+          <BalanceCard 
+            title="You're owed" 
+            amount={balance.owed} 
+            color={theme.colors.success}
+            icon="↑"
+            theme={theme}
+          />
+        </TouchableOpacity>
+
+  <TouchableOpacity style={AppStyles.balanceCell} onPress={() => {
+          // open modal showing transactions where user owes
+          const uid = currentUser?.id || currentUser?._id;
+          const txs = (recentActivity || []).filter(tx => Array.isArray(tx.participants)).filter(tx => {
+            try {
+              return tx.participants.some(p => {
+                const pid = p && (p.user?._id || p.user?.id || p.user || p._id || p.id);
+                return String(pid) === String(uid) && !(tx.settled || tx.status === 'settled' || tx.isPaid);
+              });
+            } catch (e) { return false; }
+          });
+          setBalanceModalTransactions(txs);
+          setShowBalanceModal(true);
+        }}>
+          <BalanceCard 
+            title="You owe" 
+            amount={balance.owes} 
+            color={theme.colors.error}
+            icon="↓"
+            theme={theme}
+          />
+        </TouchableOpacity>
       </View>
 
       <View style={AppStyles.section}>
@@ -370,12 +411,26 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
               key={transaction._id || transaction.id} 
               transaction={transaction} 
               theme={theme}
+              groups={userGroups}
               currentUserId={currentUser?.id || currentUser?._id}
               onSettleTransaction={handleSettleTransaction}
             />
           ))
         )}
       </View>
+      <BalanceDetailsModal
+        visible={showBalanceModal}
+        onClose={() => setShowBalanceModal(false)}
+        transactions={balanceModalTransactions}
+        currentUserId={currentUser?.id || currentUser?._id}
+        theme={theme}
+        onSettled={(txId) => {
+          // update local recent activity and refresh balances
+          setRecentActivity(prev => prev.map(t => (t._id || t.id) === txId ? { ...t, settled: true, status: 'settled' } : t));
+          setShowBalanceModal(false);
+          fetchUserBalances && fetchUserBalances();
+        }}
+      />
     </ScrollView>
   );
 }
@@ -474,6 +529,25 @@ function MainApp() {
   const [showPaymentMethods, showPaymentMethodsModal, hidePaymentMethodsModal] = useModalState();
   const [showNotifications, showNotificationsModal, hideNotificationsModal] = useModalState();
   const [showExpenseReports, showExpenseReportsModal, hideExpenseReportsModal] = useModalState();
+  // group management modal state (allow opening group editor directly from Profile)
+  const [groupManagementVisible, setGroupManagementVisible] = useState(false);
+  const [groupManagementGroupId, setGroupManagementGroupId] = useState(null);
+
+  const openGroupManagement = (groupId) => {
+    // only open the modal when a specific groupId is provided
+    if (!groupId) {
+      // no-op: Profile should present a picker and then call this with an id
+      return;
+    }
+
+    setGroupManagementGroupId(groupId);
+    setGroupManagementVisible(true);
+  };
+
+  const hideGroupManagement = () => {
+    setGroupManagementVisible(false);
+    setGroupManagementGroupId(null);
+  };
 
   if (themeLoading || userLoading || dataLoading) {
     return <LoadingScreen theme={theme} />;
@@ -592,7 +666,8 @@ function MainApp() {
             onNavigateToPaymentMethods={showPaymentMethodsModal}
             onNavigateToNotifications={showNotificationsModal}
             onNavigateToExpenseReports={showExpenseReportsModal}
-            onNavigateToGroupManagement={() => {}}
+            onNavigateToGroupManagement={openGroupManagement}
+            userGroups={userGroups}
           />
         );
       default:
@@ -639,6 +714,11 @@ function MainApp() {
       <ExpenseReportsScreen
         visible={showExpenseReports}
         onClose={hideExpenseReportsModal}
+      />
+      <GroupManagementScreen
+        visible={groupManagementVisible}
+        onClose={hideGroupManagement}
+        groupId={groupManagementGroupId}
       />
     </SafeAreaView>
   );

@@ -77,8 +77,7 @@ const AppStyles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 30,
-    elevation: 50,
+    shadowRadius: 10,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -98,16 +97,13 @@ const AppStyles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.6,
-    shadowRadius: 10,
-    elevation: 50,
+    shadowRadius: 5,
     zIndex: 1000,
   },
   addButtonPressed: {
     backgroundColor: '#6d28d9',
     transform: [{ scale: 0.92 }],
     shadowOpacity: 0.7,
-    elevation: 25,
-    top: -18,
   },
   sideButtons: {
     flexDirection: 'row',
@@ -160,9 +156,12 @@ const AppStyles = StyleSheet.create({
   },
   balanceGrid: {
     flexDirection: 'row',
-    gap: 15,
+    justifyContent: 'space-between',
     marginBottom: 20,
     paddingHorizontal: 20,
+  },
+  balanceCell: {
+    width: '48%',
   },
   balanceCards: {
     flexDirection: 'row',
@@ -179,8 +178,7 @@ const AppStyles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowRadius: 3,
   },
   balanceHeader: {
     flexDirection: 'row',
@@ -256,8 +254,8 @@ const AppStyles = StyleSheet.create({
     marginHorizontal: 12, 
     shadowColor: '#7556acff',
     shadowOpacity: 0.5,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0},
+    shadowRadius: 3,
   },
   transactionRow: {
     flexDirection: 'row',
@@ -300,6 +298,53 @@ const AppStyles = StyleSheet.create({
     height: 12,
     borderRadius: 10,
     marginLeft: 5,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 20,
+  },
+  modalPanelShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 2,
+  },
+  modalCloseButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  modalCloseButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)'
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700'
+  },
+  modalClose: {
+    color: '#7c3aed',
+    fontWeight: '700'
+  },
+  settleButton: {
+    backgroundColor: '#7c3aed',
+    paddingVertical: 8,
+    borderRadius: 8,
   },
 });
 

@@ -30,7 +30,7 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
   useEffect(() => {
     let mounted = true;
     if (groupId) {
-      // Load transactions and balances for this group when the modal opens.
+  // load transactions and balances for this group when the modal opens
       (async () => {
         try {
           const txResp = await loadTransactions(groupId);
@@ -39,7 +39,7 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
           const balances = await getGroupBalances(groupId);
           if (mounted && balances) setGroupBalances(balances || []);
         } catch (err) {
-          // ignore - DataContext handles errors
+          // ignore - datacontext handles errors
           console.warn('Failed to load group data', err.message || err);
         }
       })();
@@ -123,12 +123,12 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
     }
 
     try {
-      // Use DataContext.addGroupMember which calls POST /groups/:id/members
+      // use datacontext.addGroupMember which calls post /groups/:id/members
       await addGroupMember(groupId, newMemberEmail.trim());
       setNewMemberEmail('');
       setShowAddMember(false);
       Alert.alert('Success', 'Member added successfully');
-      // Refresh transactions and balances
+      // refresh transactions and balances
       const txResp = await loadTransactions(groupId);
       setGroupTransactions(txResp || []);
       const balances = await getGroupBalances(groupId);
@@ -288,7 +288,7 @@ const GroupManagementScreen = ({ visible, onClose, groupId }) => {
             </View>
           </View>
 
-          {/* Recent transactions for this group */}
+          {/* recent transactions for this group */}
           <View style={styles.transactionsSection}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Transactions</Text>
             {groupTransactions.length === 0 ? (

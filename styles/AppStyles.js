@@ -59,7 +59,7 @@ const AppStyles = StyleSheet.create({
   },
   navContainer: {
     position: 'absolute',
-    bottom: -45,
+    bottom: -40,
     left: 10,
     right: 10,
     paddingBottom: 20,
@@ -196,7 +196,7 @@ const AppStyles = StyleSheet.create({
     marginRight: 10,
   },
   iconText: {
-    fontSize: 10,
+    fontSize: 15,
     fontWeight: '700',
     color: 'white',
     fontFamily: FONT_FAMILY_BOLD,
@@ -218,34 +218,6 @@ const AppStyles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 15,
-    fontFamily: FONT_FAMILY_BOLD,
-  },
-  netBalance: {
-    padding: 20,
-    borderRadius: 20,
-    alignItems: 'center',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(148, 163, 184, 0.2)',
-    shadowColor: '#664693ff',
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.5,
-    shadowRadius: 15,
-    elevation: 10,
-  },
-  netLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 5,
-    fontFamily: FONT_FAMILY,
-  },
-  netAmount: {
-    fontSize: 28,
-    fontWeight: '800',
     fontFamily: FONT_FAMILY_BOLD,
   },
   empty: {
@@ -282,11 +254,10 @@ const AppStyles = StyleSheet.create({
     padding: 16,           
     marginVertical: 8,
     marginHorizontal: 12, 
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowColor: '#7556acff',
+    shadowOpacity: 0.5,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
-    elevation: 2,
   },
   transactionRow: {
     flexDirection: 'row',
@@ -321,13 +292,14 @@ const AppStyles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   amount: {
-    fontSize: 17,          
+    fontSize: 18,          
     fontWeight: '600',
   },
-  statusText: {
-    fontSize: 13,
-    color: '#999',
-    marginTop: 2,
+  statusCircle: {
+    width: 12,
+    height: 12,
+    borderRadius: 10,
+    marginLeft: 5,
   },
 });
 

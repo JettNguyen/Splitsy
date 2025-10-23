@@ -81,7 +81,7 @@ export const NotificationProvider = ({ children }) => {
     await saveNotifications(updated);
   };
 
-  //notification types
+  // notification types
   const notifyExpenseAdded = async (expense, groupName) => {
     return await addNotification({
       type: 'expense_added',

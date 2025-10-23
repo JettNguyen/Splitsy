@@ -7,12 +7,14 @@ import {
   TextInput,
   Alert,
   FlatList,
-  Modal
+  Modal,
+  Linking,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet } from 'react-native';
-import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
+import AppStyles, { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
 import apiService from '../services/apiService';
 
 import { useData } from '../context/ApiDataContext';
@@ -31,8 +33,19 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
   const [friends, setFriends] = useState(userFriends || []);
   const [selectedFriendForDetails, setSelectedFriendForDetails] = useState(null);
   const [showFriendDetails, setShowFriendDetails] = useState(false);
+  const [friendBalance, setFriendBalance] = useState(null);
+  const [friendBalances, setFriendBalances] = useState({}); // store balances for all friends
+
+  // payment modal & options
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentOptions, setPaymentOptions] = useState([]);
+  const [isLoadingPaymentOptions, setIsLoadingPaymentOptions] = useState(false);
+  const [paymentTargetUser, setPaymentTargetUser] = useState(null);
 
   const [groups, setGroups] = useState([]);
+  const [selectedGroupForDetails, setSelectedGroupForDetails] = useState(null);
+  const [showGroupDetails, setShowGroupDetails] = useState(false);
+  const [groupBalance, setGroupBalance] = useState(null);
   
   React.useEffect(() => {
     const sanitizedGroups = (userGroups || []).map(group => ({
@@ -83,11 +96,165 @@ const handleRemoveSelectedFriend = async (friend) => {
       Alert.alert('Removed', 'Friend removed successfully');
       setShowFriendDetails(false);
       setSelectedFriendForDetails(null);
+      setFriendBalance(null);
     } else {
       Alert.alert('Error', res.message || 'Failed to remove friend');
     }
   } catch (err) {
     Alert.alert('Error', err.message || 'Server error');
+  }
+};
+
+const fetchFriendBalance = async (friendId) => {
+  try {
+    const result = await apiService.getFriendBalance(friendId);
+    if (result && result.success) {
+      setFriendBalance(result);
+    }
+  } catch (err) {
+    console.error('Error fetching friend balance:', err);
+    setFriendBalance(null);
+  }
+};
+
+const fetchAllFriendBalances = async () => {
+  try {
+    const balances = {};
+    for (const friend of friends) {
+      const result = await apiService.getFriendBalance(friend.id);
+      if (result && result.success) {
+        balances[friend.id] = result.balance;
+      }
+    }
+    setFriendBalances(balances);
+  } catch (err) {
+    console.error('Error fetching friend balances:', err);
+  }
+};
+
+const handleSettleFriendBalance = async () => {
+  if (!selectedFriendForDetails || !friendBalance) return;
+  
+  try {
+    // Open payment method selector so user can choose how they want to pay
+    setPaymentTargetUser(selectedFriendForDetails);
+    await loadPaymentOptions(selectedFriendForDetails.id);
+    setShowPaymentModal(true);
+  } catch (err) {
+    console.error('Error settling friend balance:', err);
+    Alert.alert('Error', 'Failed to settle balance');
+  }
+};
+
+const fetchGroupBalance = async (groupId) => {
+  try {
+    const result = await apiService.getGroupBalances(groupId);
+    if (result && result.success) {
+      setGroupBalance(result);
+    }
+  } catch (err) {
+    console.error('Error fetching group balance:', err);
+    setGroupBalance(null);
+  }
+};
+
+const handleSettleGroupBalance = async () => {
+  if (!selectedGroupForDetails || !groupBalance) return;
+  
+  try {
+    // For groups, show same modal but target is the group owner or group itself.
+    // For now, pick the group's creator as the settlement target if available.
+    const target = selectedGroupForDetails.createdBy || (selectedGroupForDetails.members && selectedGroupForDetails.members[0]);
+    if (!target) {
+      Alert.alert('Error', 'No valid payment recipient configured for this group');
+      return;
+    }
+    setPaymentTargetUser({ id: target });
+    await loadPaymentOptions(target);
+    setShowPaymentModal(true);
+  } catch (err) {
+    console.error('Error settling group balance:', err);
+    Alert.alert('Error', 'Failed to settle balance');
+  }
+};
+
+// load and intersect payment options between current user and target user
+const loadPaymentOptions = async (targetUserId) => {
+  setIsLoadingPaymentOptions(true);
+  try {
+    const myMethodsResp = await apiService.getPaymentMethods();
+    const friendMethodsResp = await apiService.getFriendPaymentMethods(targetUserId);
+
+    const myMethods = (myMethodsResp && myMethodsResp.data && myMethodsResp.data.paymentMethods) ? myMethodsResp.data.paymentMethods : myMethodsResp.paymentMethods || myMethodsResp || [];
+    const friendMethods = (friendMethodsResp && friendMethodsResp.data && friendMethodsResp.data.paymentMethods) ? friendMethodsResp.data.paymentMethods : friendMethodsResp.paymentMethods || friendMethodsResp || [];
+
+  // only show payment methods that the other user has configured (target)
+  // we will present friendMethods as options to pay to (since you pay to their handle)
+    if (!friendMethods || friendMethods.length === 0) {
+      Alert.alert('No payment methods', 'This user has not added any payment methods.');
+      setPaymentOptions([]);
+      return;
+    }
+
+    const validMethods = friendMethods.map(m => ({ id: m.id || m._id, type: m.type, handle: m.handle }));
+    setPaymentOptions(validMethods);
+  } catch (err) {
+    console.error('Error loading payment options:', err);
+    setPaymentOptions([]);
+  } finally {
+    setIsLoadingPaymentOptions(false);
+  }
+};
+
+  // deep link map for common payment apps
+const paymentDeepLink = (method, handle) => {
+  switch (method) {
+    case 'Venmo':
+      return `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handle)}`;
+    case 'CashApp':
+      // Cash App supports cashtag deep links via cashapp://$cashtag
+      return `cashapp://$${encodeURIComponent(handle)}`;
+    case 'PayPal':
+      return `paypal://send?recipient=${encodeURIComponent(handle)}`;
+    case 'Zelle':
+  // zelle deep links vary by bank; fallback to mailto for email or tel for phone
+      if (handle.includes('@')) return `mailto:${handle}`;
+      return `tel:${handle}`;
+    default:
+      return null;
+  }
+};
+
+const openPaymentApp = async (method) => {
+  try {
+    const url = paymentDeepLink(method.type, method.handle);
+    if (url) {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+      // fallback: copy handle to clipboard and show instructions
+        Alert.alert('Open Payment App', `Could not open ${method.type} app. Please use handle: ${method.handle}`);
+      }
+  // mark transaction/participant as paid on backend (best-effort)
+      if (selectedFriendForDetails && friendBalance) {
+        try {
+          // find a transaction to mark as paid: in friend flows we don't have a single tx id; the app marks using settle endpoint on relevant tx ids.
+          // for simplicity we'll call the backend settle endpoint with paymentMethodId so it records the attempt against the last transaction if applicable.
+          // note: this is a best-effort placeholder; ideally we'd pass a specific transaction id and amount.
+          await apiService.markTransactionPaid(selectedFriendForDetails.id, null, true, method.id);
+        } catch (err) {
+          console.warn('Failed to mark backend paid:', err.message || err);
+        }
+      }
+    } else {
+      Alert.alert('Unsupported', `No deep link available for ${method.type}. Use handle: ${method.handle}`);
+    }
+  } catch (err) {
+    console.error('Error opening payment app:', err);
+    Alert.alert('Error', 'Failed to open payment app');
+  } finally {
+    setShowPaymentModal(false);
   }
 };
 
@@ -100,6 +267,19 @@ const handleRemoveSelectedFriend = async (friend) => {
         const result = await apiService.getFriends();
         if (result && result.success && Array.isArray(result.friends)) {
           setFriends(result.friends);
+          // fetch balances for all friends
+          const balances = {};
+          for (const friend of result.friends) {
+            try {
+              const balanceResult = await apiService.getFriendBalance(friend.id);
+              if (balanceResult && balanceResult.success) {
+                balances[friend.id] = balanceResult.balance;
+              }
+            } catch (err) {
+              console.error(`Error fetching balance for friend ${friend.id}:`, err);
+            }
+          }
+          setFriendBalances(balances);
         }
       } catch (err) {
         console.error('Error fetching friends:', err);
@@ -117,7 +297,7 @@ const handleRemoveSelectedFriend = async (friend) => {
       }
     };
 
-    // Only fetch protected data when user is authenticated and an auth token exists
+  // only fetch protected data when user is authenticated and an auth token exists
     if (isAuthenticated && apiService.token) {
       fetchFriends();
       fetchRequests();
@@ -134,7 +314,7 @@ const handleRemoveSelectedFriend = async (friend) => {
       return;
     }
 
-    // Prepare payload: backend accepts optional memberEmails
+      // prepare payload: backend accepts optional memberEmails
     const memberEmails = selectedFriends.length > 0
       ? friends
           .filter(f => selectedFriends.includes(f.id) || selectedFriends.includes(f._id))
@@ -160,12 +340,40 @@ const handleRemoveSelectedFriend = async (friend) => {
     }
   };
 
+  const handleLeaveGroup = async (groupId, groupName) => {
+    // leave group
+    try {
+      const result = await apiService.leaveGroup(groupId);
+      if (result && result.success) {
+        setGroups(prev => prev.filter(group => group.id !== groupId));
+        // close modal if it's open
+        if (selectedGroupForDetails && selectedGroupForDetails.id === groupId) {
+          setShowGroupDetails(false);
+          setSelectedGroupForDetails(null);
+          setGroupBalance(null);
+        }
+        Alert.alert('Success', 'You have left the group');
+      } else {
+        Alert.alert('Error', result.message || 'Failed to leave group');
+      }
+    } catch (error) {
+      console.error('Error leaving group:', error);
+      Alert.alert('Error', 'Failed to leave group');
+    }
+  };
+
   const handleDeleteGroup = async (groupId, groupName) => {
     // Perform delete immediately without a confirmation alert
     try {
       await deleteGroupAPI(groupId);
       setGroups(prev => prev.filter(group => group.id !== groupId));
-      // no user-facing Alert per request
+      // Close modal if it's open
+      if (selectedGroupForDetails && selectedGroupForDetails.id === groupId) {
+        setShowGroupDetails(false);
+        setSelectedGroupForDetails(null);
+        setGroupBalance(null);
+      }
+  // no user-facing alert per request
     } catch (error) {
       console.error('Error deleting group:', error);
       // keep silent for now; could show a toast/snackbar later
@@ -183,13 +391,20 @@ const handleRemoveSelectedFriend = async (friend) => {
   const renderFriendItem = ({ item }) => {
     if (!item) return null;
 
+    const balance = friendBalances[item.id] || 0;
+    const balanceColor = balance > 0 ? '#4CAF50' : balance < 0 ? '#f44336' : theme.colors.textSecondary;
+
     return (
       <View style={styles.cardWrapper}>
         {/* behind-card shadow so parent clipping won't hide it */}
         <View style={[styles.cardShadow, { shadowColor: '#673e9dff' }]} pointerEvents="none" />
         <TouchableOpacity 
           style={[styles.friendItem, { backgroundColor: theme.colors.card }]}
-          onPress={showCreateGroup ? () => toggleFriendSelection(item.id) : () => { setSelectedFriendForDetails(item); setShowFriendDetails(true); }}
+          onPress={showCreateGroup ? () => toggleFriendSelection(item.id) : () => { 
+            setSelectedFriendForDetails(item); 
+            setShowFriendDetails(true); 
+            fetchFriendBalance(item.id);
+          }}
         >
           <View style={styles.friendInfo}>
             <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}> 
@@ -202,29 +417,32 @@ const handleRemoveSelectedFriend = async (friend) => {
           </View>
 
           <View style={styles.friendActions}>
-            {showCreateGroup && (
+            {showCreateGroup ? (
               <View style={[
-                styles.checkbox, 
-                { 
-                  backgroundColor: selectedFriends.includes(item.id) 
-                    ? theme.colors.primary 
-                    : 'transparent',
-                  borderColor: theme.colors.primary 
+                styles.checkbox,
+                {
+                  backgroundColor: selectedFriends.includes(item.id) ? theme.colors.primary : 'transparent',
+                  borderColor: theme.colors.primary,
                 }
               ]}>
                 {selectedFriends.includes(item.id) && (
                   <Text style={styles.checkmark}>✓</Text>
                 )}
               </View>
+            ) : (
+              <View style={styles.balanceContainer}>
+                <Text style={[styles.balanceAmount, { color: balanceColor }]}>
+                  ${Math.abs(balance).toFixed(2)}
+                </Text>
+              </View>
             )}
-            
           </View>
         </TouchableOpacity>
       </View>
     );
   };
 
-  // Friend details modal handlers
+  // friend details modal handlers
 
   const handleAccept = async (requestId) => {
     try {
@@ -254,41 +472,40 @@ const handleRemoveSelectedFriend = async (friend) => {
   const renderGroupItem = ({ item }) => {
     if (!item) return null;
     
+    const balance = item.totalOwed || 0;
+    const balanceColor = balance > 0 ? '#4CAF50' : balance < 0 ? '#f44336' : theme.colors.textSecondary;
+    
     return (
       <View style={styles.cardWrapper}>
         <View style={[styles.cardShadow, { shadowColor: '#673e9dff' }]} pointerEvents="none" />
-        <View style={[styles.groupItem, { backgroundColor: theme.colors.card }]}>
-          <TouchableOpacity 
-            style={styles.groupContent}
-            onLongPress={() => handleDeleteGroup(item.id, item.name)}
-          >
-            <View style={styles.groupHeader}>
-              <View style={[styles.groupIcon, { backgroundColor: theme.colors.primary }]}>
-                <Text style={styles.groupIconText}>👥</Text>
-              </View>
-              <View style={styles.groupDetails}>
-                <Text style={[styles.groupName, { color: theme.colors.text }]}>{item.name || 'Untitled Group'}</Text>
-                <Text style={[styles.groupMembers, { color: theme.colors.textSecondary }]}>
-                  {item.memberCount || 0} members • {item.lastActivity || 'No activity'}
-                </Text>
-              </View>
-              <View style={styles.groupAmount}>
-                <Text style={[styles.amountText, { color: theme.colors.primary }]}>
-                  ${(item.totalOwed || 0).toFixed(2)}
-                </Text>
-              </View>
+        <TouchableOpacity 
+          style={[styles.friendItem, { backgroundColor: theme.colors.card }]}
+          onPress={() => {
+            setSelectedGroupForDetails(item);
+            setShowGroupDetails(true);
+            fetchGroupBalance(item.id);
+          }}
+        >
+          <View style={styles.friendInfo}>
+            <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
+              <Text style={styles.avatarText}>👥</Text>
             </View>
-            
-          </TouchableOpacity>
-          
-          {/*delete button*/}
-          <TouchableOpacity
-            style={[styles.deleteButton, { backgroundColor: theme.colors.error }]}
-            onPress={() => handleDeleteGroup(item.id, item.name)}
-          >
-            <Text style={styles.deleteButtonText}>🗑️</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.friendDetails}>
+              <Text style={[styles.friendName, { color: theme.colors.text }]}>{item.name || 'Untitled Group'}</Text>
+              <Text style={[styles.friendEmail, { color: theme.colors.textSecondary }]}>
+                {item.memberCount || 0} members
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.friendActions}>
+            <View style={styles.balanceContainer}>
+              <Text style={[styles.balanceAmount, { color: balanceColor }]}>
+                ${Math.abs(balance).toFixed(2)}
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -343,10 +560,8 @@ const handleRemoveSelectedFriend = async (friend) => {
               nestedScrollEnabled={true}
             />
           ) : (
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                No friends yet. Add friends to start splitting expenses!
-              </Text>
+            <View style={AppStyles.empty}>
+              <Text style={[AppStyles.emptyText, { color: theme.colors.textSecondary }]}>No friends yet. Add friends to start splitting expenses!</Text>
             </View>
           )}
         </View>
@@ -450,9 +665,6 @@ const handleRemoveSelectedFriend = async (friend) => {
           {/*groups list*/}
           {groups.length > 0 ? (
             <>
-              <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>
-                Long press or tap the 🗑️ button to delete a group
-              </Text>
               <FlatList
                 data={groups}
                 renderItem={renderGroupItem}
@@ -500,7 +712,7 @@ const handleRemoveSelectedFriend = async (friend) => {
 
       {/*tab navigation*/}
       <View style={[styles.tabContainer, { backgroundColor: theme.colors.card }]}>
-        {/* Friends Tab */}
+        {/* friends Tab */}
         <TouchableOpacity
           style={[
             styles.tab,
@@ -516,7 +728,7 @@ const handleRemoveSelectedFriend = async (friend) => {
           </Text>
         </TouchableOpacity>
 
-        {/* Groups Tab */}
+        {/* groups Tab */}
         <TouchableOpacity
           style={[
             styles.tab,
@@ -536,7 +748,7 @@ const handleRemoveSelectedFriend = async (friend) => {
       {/*tab content*/}
       {renderTabContent()}
 
-      {/* Friend details modal */}
+      {/* friend details modal */}
       {selectedFriendForDetails && (
         <Modal
           visible={showFriendDetails}
@@ -545,12 +757,50 @@ const handleRemoveSelectedFriend = async (friend) => {
           onRequestClose={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); }}
         >
           <TouchableOpacity activeOpacity={1} style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); }}>
-            <SafeAreaView style={[styles.modalContainer, { justifyContent: 'center', alignItems: 'center' }]}> 
+            <SafeAreaView style={[styles.modalContainer, { justifyContent: 'center', alignItems: 'stretch' }]}> 
               <TouchableOpacity activeOpacity={1} style={[styles.friendDetailsModal, { backgroundColor: theme.colors.card }]}>
                 <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{selectedFriendForDetails.name || 'Friend'}</Text>
                 <Text style={{ color: theme.colors.textSecondary, marginBottom: 12 }}>{selectedFriendForDetails.email}</Text>
+                
+                {/* balance Information */}
+                {friendBalance && (
+                  <View style={{ marginBottom: 20, padding: 15, backgroundColor: theme.colors.background, borderRadius: 8, width: '100%' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8 }}>Running Balance</Text>
+                    <Text style={{ 
+                      fontSize: 24, 
+                      fontWeight: 'bold', 
+                      color: friendBalance.balance >= 0 ? '#4CAF50' : '#f44336',
+                      marginBottom: 8
+                    }}>
+                      ${Math.abs(friendBalance.balance).toFixed(2)}
+                    </Text>
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 12, marginBottom: 4 }}>
+                        You paid: ${friendBalance.totalPaid.toFixed(2)}
+                      </Text>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
+                        You owe: ${friendBalance.totalOwed.toFixed(2)}
+                      </Text>
+                    </View>
+                    {friendBalance.balance !== 0 && (
+                      <TouchableOpacity 
+                        style={[styles.settleButton, { backgroundColor: theme.colors.primary, marginTop: 12 }]}
+                        onPress={handleSettleFriendBalance}
+                      >
+                        <Text style={{ color: 'white', fontWeight: '600' }}>Settle Balance</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+                
+                {!friendBalance && (
+                  <View style={{ marginBottom: 20, padding: 15, backgroundColor: theme.colors.background, borderRadius: 8 }}>
+                    <Text style={{ color: theme.colors.textSecondary, textAlign: 'center' }}>Loading balance...</Text>
+                  </View>
+                )}
+
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-                  <TouchableOpacity style={[styles.cancelButton, { borderColor: theme.colors.textSecondary, marginRight: 8 }]} onPress={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); }}>
+                  <TouchableOpacity style={[styles.cancelButton, { borderColor: theme.colors.textSecondary, marginRight: 8 }]} onPress={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); setFriendBalance(null); }}>
                     <Text style={{ color: theme.colors.textSecondary }}>Close</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.error }]} onPress={() => handleRemoveSelectedFriend(selectedFriendForDetails)}>
@@ -562,6 +812,117 @@ const handleRemoveSelectedFriend = async (friend) => {
           </TouchableOpacity>
         </Modal>
       )}
+
+      {/* group details modal */}
+      {selectedGroupForDetails && (
+        <Modal
+          visible={showGroupDetails}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => { setShowGroupDetails(false); setSelectedGroupForDetails(null); setGroupBalance(null); }}
+        >
+          <TouchableOpacity activeOpacity={1} style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={() => { setShowGroupDetails(false); setSelectedGroupForDetails(null); setGroupBalance(null); }}>
+            <SafeAreaView style={[styles.modalContainer, { justifyContent: 'center', alignItems: 'stretch' }]}> 
+              <TouchableOpacity activeOpacity={1} style={[styles.friendDetailsModal, { backgroundColor: theme.colors.card }]}>
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{selectedGroupForDetails.name || 'Group'}</Text>
+                {/* show a list of group members (avatars + names) instead of just a count */}
+                <View style={{ marginBottom: 12 }}>
+                  {(selectedGroupForDetails.members || []).length === 0 ? (
+                    <Text style={{ color: theme.colors.textSecondary }}>No members</Text>
+                  ) : (
+                    (selectedGroupForDetails.members || []).map((m, idx) => {
+                      const memberKey = String(m?.user?._id || m?.user?.id || (typeof m?.user === 'string' ? m.user : null) || m?.id || idx);
+                      return (
+                      <View key={memberKey} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                          <Text style={{ color: 'white', fontWeight: '700' }}>{(m.user && m.user.name) ? (m.user.name[0]) : (m.name ? m.name[0] : '?')}</Text>
+                        </View>
+                        <Text style={{ color: theme.colors.text }}>{m.user?.name || m.name || m.email || 'Member'}</Text>
+                      </View>
+                    )})
+                  )}
+                </View>
+                
+                {/* balance Information */}
+                {groupBalance && (
+                  <View style={{ marginBottom: 20, padding: 15, backgroundColor: theme.colors.background, borderRadius: 8, width: '100%' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8 }}>Your Group Balance</Text>
+                    <Text style={{ 
+                      fontSize: 24, 
+                      fontWeight: 'bold', 
+                      color: groupBalance.balance >= 0 ? '#4CAF50' : '#f44336',
+                      marginBottom: 8
+                    }}>
+                      ${Math.abs(groupBalance.balance || 0).toFixed(2)}
+                    </Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
+                        Total owed: ${selectedGroupForDetails.totalOwed?.toFixed(2) || '0.00'}
+                      </Text>
+                    </View>
+                    {(groupBalance.balance || 0) !== 0 && (
+                      <TouchableOpacity 
+                        style={[styles.settleButton, { backgroundColor: theme.colors.primary, marginTop: 12 }]}
+                        onPress={handleSettleGroupBalance}
+                      >
+                        <Text style={{ color: 'white', fontWeight: '600' }}>Settle Balance</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+                
+                {!groupBalance && (
+                  <View style={{ marginBottom: 20, padding: 15, backgroundColor: theme.colors.background, borderRadius: 8 }}>
+                    <Text style={{ color: theme.colors.textSecondary, textAlign: 'center' }}>Loading balance...</Text>
+                  </View>
+                )}
+
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                  <TouchableOpacity style={[styles.cancelButton, { borderColor: theme.colors.textSecondary, marginRight: 8 }]} onPress={() => { setShowGroupDetails(false); setSelectedGroupForDetails(null); setGroupBalance(null); }}>
+                    <Text style={{ color: theme.colors.textSecondary }}>Close</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.error }]} onPress={() => handleLeaveGroup(selectedGroupForDetails.id, selectedGroupForDetails.name)}>
+                    <Text style={styles.addButtonText}>Leave Group</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            </SafeAreaView>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {/* payment method selection modal */}
+      <Modal
+        visible={showPaymentModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPaymentModal(false)}
+      >
+        <TouchableOpacity activeOpacity={1} style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={() => setShowPaymentModal(false)}>
+          <SafeAreaView style={[styles.modalContainer, { justifyContent: 'center', alignItems: 'stretch' }]}> 
+            <TouchableOpacity activeOpacity={1} style={[styles.friendDetailsModal, { backgroundColor: theme.colors.card }]}> 
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Choose payment method</Text>
+              {isLoadingPaymentOptions ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : paymentOptions.length === 0 ? (
+                <Text style={{ color: theme.colors.textSecondary, marginTop: 12 }}>No payment methods available for this user.</Text>
+              ) : (
+                paymentOptions.map(pm => (
+                  <TouchableOpacity key={pm.id || pm._id} style={[styles.settleButton, { backgroundColor: theme.colors.background, marginTop: 8 }]} onPress={() => openPaymentApp(pm)}>
+                    <Text style={{ color: theme.colors.text }}>{pm.type} — {pm.handle}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
+                <TouchableOpacity style={[styles.cancelButton, { borderColor: theme.colors.textSecondary, marginRight: 8 }]} onPress={() => setShowPaymentModal(false)}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </SafeAreaView>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -711,7 +1072,6 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     marginBottom: 12,
-    // keep overflow visible so shadows show
     overflow: 'visible',
     zIndex: 5,
   },
@@ -930,15 +1290,15 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'stretch',
+    paddingHorizontal: 25,
     backgroundColor: 'rgba(0,0,0,0.4)'
   },
   friendDetailsModal: {
-    width: '90%',
+    width: '100%',
+    maxWidth: 820,
     borderRadius: 12,
-    padding: 20,
-    // ensure the modal content doesn't push to top
-    alignItems: 'flex-start'
+    padding: 24,
   },
   modalContainer: {
     flex: 1,
@@ -947,6 +1307,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 6,
+  },
+  settleButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  balanceContainer: {
+    alignItems: 'flex-end',
+  },
+  balanceAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  balanceLabel: {
+    fontSize: 12,
+    fontWeight: '400',
   },
 });
 

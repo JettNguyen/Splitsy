@@ -3,9 +3,9 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const { validationResult } = require('express-validator');
 
-// @desc    Get all groups for user
-// @route   GET /api/groups
-// @access  Private
+// description: get all groups for the authenticated user
+// route: get /api/groups
+// access: private
 const getGroups = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -38,9 +38,9 @@ const getGroups = async (req, res) => {
   }
 };
 
-// @desc    Get single group
-// @route   GET /api/groups/:id
-// @access  Private
+// description: get a single group by id
+// route: get /api/groups/:id
+// access: private
 const getGroup = async (req, res) => {
   try {
     const group = await Group.findById(req.params.id)
@@ -54,7 +54,7 @@ const getGroup = async (req, res) => {
       });
     }
 
-    // Check if user is a member
+  // check if the requesting user is a member
     if (!group.isMember(req.user._id)) {
       return res.status(403).json({
         success: false,
@@ -62,7 +62,7 @@ const getGroup = async (req, res) => {
       });
     }
 
-    // Get recent transactions
+  // get recent transactions for the group
     const recentTransactions = await Transaction.find({
       $or: [
         { group: group._id },     // transactions in this group
@@ -74,7 +74,7 @@ const getGroup = async (req, res) => {
     .populate('participants.user', 'name email')
     .sort({ createdAt: -1 })
     .limit(10);
-    // Get group statistics
+  // get group statistics
     const stats = await Transaction.aggregate([
       { $match: { group: group._id, status: { $ne: 'cancelled' } } },
       {
@@ -111,12 +111,12 @@ const getGroup = async (req, res) => {
   }
 };
 
-// @desc    Create new group
-// @route   POST /api/groups
-// @access  Private
+// description: create a new group
+// route: post /api/groups
+// access: private
 const createGroup = async (req, res) => {
   try {
-    // Check for validation errors
+    // check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -128,7 +128,7 @@ const createGroup = async (req, res) => {
 
     const { name, description, currency, category, memberEmails } = req.body;
 
-    // Create group
+    // create group
     const group = await Group.create({
       name,
       description,
@@ -137,7 +137,7 @@ const createGroup = async (req, res) => {
       creator: req.user._id
     });
 
-    // Add invited members if provided
+  // add invited members if provided (by email)
     if (memberEmails && memberEmails.length > 0) {
       for (const email of memberEmails) {
         try {
@@ -145,7 +145,7 @@ const createGroup = async (req, res) => {
           if (user && !group.isMember(user._id)) {
             await group.addMember(user._id);
             
-            // Add group to user's groups array
+            // add group to user's groups array
             user.groups.push(group._id);
             await user.save();
           }
@@ -155,12 +155,12 @@ const createGroup = async (req, res) => {
       }
     }
 
-    // Add group to creator's groups array
+  // add the created group to the creator's groups array
     const creator = await User.findById(req.user._id);
     creator.groups.push(group._id);
     await creator.save();
 
-    // Populate the response
+  // populate the response with creator and members info
     await group.populate('creator', 'name email');
     await group.populate('members.user', 'name email');
 
@@ -179,9 +179,9 @@ const createGroup = async (req, res) => {
   }
 };
 
-// @desc    Update group
-// @route   PUT /api/groups/:id
-// @access  Private (Admin only)
+// description: update group
+// route: put /api/groups/:id
+// access: private (admin only)
 const updateGroup = async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
@@ -193,7 +193,7 @@ const updateGroup = async (req, res) => {
       });
     }
 
-    // Check if user is admin
+  // check if user is admin
     if (!group.isAdmin(req.user._id)) {
       return res.status(403).json({
         success: false,
@@ -209,7 +209,7 @@ const updateGroup = async (req, res) => {
       settings: req.body.settings
     };
 
-    // Remove undefined fields
+  // remove undefined fields
     Object.keys(fieldsToUpdate).forEach(key => {
       if (fieldsToUpdate[key] === undefined) {
         delete fieldsToUpdate[key];
@@ -239,12 +239,12 @@ const updateGroup = async (req, res) => {
   }
 };
 
-// @desc    Delete group
-// @route   DELETE /api/groups/:id
-// @access  Private (Admin only)
+// description: delete (deactivate) group
+// route: delete /api/groups/:id
+// access: private (admin only)
 const deleteGroup = async (req, res) => {
   try {
-    const group = await Group.findById(req.params.id);
+    const group = await Group.findById(req.params.id).populate('members.user', 'name email');
 
     if (!group) {
       return res.status(404).json({
@@ -253,7 +253,7 @@ const deleteGroup = async (req, res) => {
       });
     }
 
-    // Check if user is admin
+    // check if user is admin
     if (!group.isAdmin(req.user._id)) {
       return res.status(403).json({
         success: false,
@@ -261,7 +261,7 @@ const deleteGroup = async (req, res) => {
       });
     }
 
-    // Check if there are unsettled transactions
+  // check if there are unsettled transactions
     const unsettledTransactions = await Transaction.countDocuments({
       group: group._id,
       status: { $in: ['pending', 'approved'] }
@@ -274,11 +274,11 @@ const deleteGroup = async (req, res) => {
       });
     }
 
-    // Mark group as inactive instead of deleting
+  // mark group as inactive instead of deleting
     group.isActive = false;
     await group.save();
 
-    // Remove group from all users' groups arrays
+  // remove group from all users' groups arrays
     await User.updateMany(
       { groups: group._id },
       { $pull: { groups: group._id } }
@@ -298,9 +298,9 @@ const deleteGroup = async (req, res) => {
   }
 };
 
-// @desc    Add member to group
-// @route   POST /api/groups/:id/members
-// @access  Private (Admin only or if group allows member invites)
+// description: add a member to the group
+// route: post /api/groups/:id/members
+// access: private (admin or when invites allowed)
 const addMember = async (req, res) => {
   try {
     const { email } = req.body;
@@ -313,7 +313,7 @@ const addMember = async (req, res) => {
       });
     }
 
-    // Check permissions
+    // check permissions
     const canInvite = group.isAdmin(req.user._id) || 
                      (group.settings.allowMemberInvites && group.isMember(req.user._id));
     
@@ -324,7 +324,7 @@ const addMember = async (req, res) => {
       });
     }
 
-    // Find user by email
+    // find user by email
     const user = await User.findOne({ email: email.toLowerCase() });
     
     if (!user) {
@@ -334,14 +334,14 @@ const addMember = async (req, res) => {
       });
     }
 
-    // Add member to group
+    // add member to group
     await group.addMember(user._id);
     
-    // Add group to user's groups array
+    // add group to user's groups array
     user.groups.push(group._id);
     await user.save();
 
-    // Populate the updated group
+    // populate the updated group
     await group.populate('members.user', 'name email');
 
     res.json({
@@ -366,9 +366,9 @@ const addMember = async (req, res) => {
   }
 };
 
-// @desc    Remove member from group
-// @route   DELETE /api/groups/:id/members/:userId
-// @access  Private (Admin only)
+// description: remove member from group
+// route: delete /api/groups/:id/members/:userid
+// access: private (admin only)
 const removeMember = async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
@@ -380,7 +380,7 @@ const removeMember = async (req, res) => {
       });
     }
 
-    // Check if user is admin
+    // check if user is admin
     if (!group.isAdmin(req.user._id)) {
       return res.status(403).json({
         success: false,
@@ -390,7 +390,7 @@ const removeMember = async (req, res) => {
 
     const userToRemove = req.params.userId;
 
-    // Check if user has unsettled transactions
+    // check if user has unsettled transactions
     const unsettledTransactions = await Transaction.countDocuments({
       group: group._id,
       $or: [
@@ -407,16 +407,16 @@ const removeMember = async (req, res) => {
       });
     }
 
-    // Remove member from group
+    // remove member from group
     await group.removeMember(userToRemove);
     
-    // Remove group from user's groups array
+    // remove group from user's groups array
     await User.findByIdAndUpdate(
       userToRemove,
       { $pull: { groups: group._id } }
     );
 
-    // Populate the updated group
+    // populate the updated group
     await group.populate('members.user', 'name email');
 
     res.json({
@@ -442,9 +442,9 @@ const removeMember = async (req, res) => {
   }
 };
 
-// @desc    Leave group
-// @route   POST /api/groups/:id/leave
-// @access  Private
+// description: leave group
+// route: post /api/groups/:id/leave
+// access: private
 const leaveGroup = async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
@@ -456,7 +456,7 @@ const leaveGroup = async (req, res) => {
       });
     }
 
-    // Check if user is a member
+    // check if user is a member
     if (!group.isMember(req.user._id)) {
       return res.status(400).json({
         success: false,
@@ -464,7 +464,7 @@ const leaveGroup = async (req, res) => {
       });
     }
 
-    // Don't allow creator to leave group
+    // don't allow creator to leave group
     if (group.creator.toString() === req.user._id.toString()) {
       return res.status(400).json({
         success: false,
@@ -472,7 +472,7 @@ const leaveGroup = async (req, res) => {
       });
     }
 
-    // Check if user has unsettled transactions
+    // check if user has unsettled transactions
     const unsettledTransactions = await Transaction.countDocuments({
       group: group._id,
       $or: [
@@ -489,10 +489,10 @@ const leaveGroup = async (req, res) => {
       });
     }
 
-    // Remove member from group
+    // remove member from group
     await group.removeMember(req.user._id);
     
-    // Remove group from user's groups array
+    // remove group from user's groups array
     req.user.groups.pull(group._id);
     await req.user.save();
 
@@ -510,9 +510,9 @@ const leaveGroup = async (req, res) => {
   }
 };
 
-// @desc    Get group balances
-// @route   GET /api/groups/:id/balances
-// @access  Private (Members only)
+// description: get group balances for each member
+// route: get /api/groups/:id/balances
+// access: private (members only)
 const getGroupBalances = async (req, res) => {
   try {
     const group = await Group.findById(req.params.id)
@@ -525,7 +525,7 @@ const getGroupBalances = async (req, res) => {
       });
     }
 
-    // Check if user is a member
+    // check if user is a member
     if (!group.isMember(req.user._id)) {
       return res.status(403).json({
         success: false,
@@ -533,7 +533,7 @@ const getGroupBalances = async (req, res) => {
       });
     }
 
-    // Calculate balances for each member
+    // calculate balances for each member
     const balances = [];
     
     for (const member of group.members) {

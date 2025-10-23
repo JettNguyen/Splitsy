@@ -56,7 +56,7 @@ const transactionSchema = new mongoose.Schema({
     },
     amount: {
       type: Number,
-      // amount may be set by split calculations (percentage/equal). Not required on input for percentage splits.
+      // amount may be set by split calculations (percentage/equal). not required on input for percentage splits.
       min: 0
     },
     percentage: {
@@ -142,6 +142,17 @@ const transactionSchema = new mongoose.Schema({
     },
     comment: String
   }],
+  settlements: [{
+    initiator: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // who initiated the settlement action
+    target: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // target participant (recipient)
+    amount: { type: Number },
+    paymentMethod: {
+      id: { type: mongoose.Schema.Types.ObjectId },
+      type: { type: String },
+      handle: { type: String }
+    },
+    createdAt: { type: Date, default: Date.now }
+  }],
   settledAt: {
     type: Date
   },
@@ -156,14 +167,14 @@ const transactionSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Virtual for total owed by participants
+// virtual for total owed by participants
 transactionSchema.virtual('totalOwed').get(function() {
   return this.participants.reduce((sum, participant) => {
     return sum + participant.amount;
   }, 0);
 });
 
-// Virtual for remaining amount to be paid
+// virtual for remaining amount to be paid
 transactionSchema.virtual('remainingAmount').get(function() {
   const paidAmount = this.participants.reduce((sum, participant) => {
     return sum + (participant.paid ? participant.amount : 0);
@@ -171,7 +182,7 @@ transactionSchema.virtual('remainingAmount').get(function() {
   return this.amount - paidAmount;
 });
 
-// Virtual for completion percentage
+// virtual for completion percentage
 transactionSchema.virtual('completionPercentage').get(function() {
   if (this.amount === 0) return 100;
   
@@ -182,12 +193,12 @@ transactionSchema.virtual('completionPercentage').get(function() {
   return Math.round((paidAmount / this.amount) * 100);
 });
 
-// Virtual for whether transaction needs approval
+// virtual for whether transaction needs approval
 transactionSchema.virtual('needsApproval').get(function() {
   return this.status === 'pending' && this.approvals.length === 0;
 });
 
-// Indexes for better query performance
+// indexes for better query performance
 transactionSchema.index({ group: 1 });
 transactionSchema.index({ payer: 1 });
 transactionSchema.index({ 'participants.user': 1 });
@@ -195,15 +206,15 @@ transactionSchema.index({ status: 1 });
 transactionSchema.index({ createdAt: -1 });
 transactionSchema.index({ category: 1 });
 
-// Compound indexes
+// compound indexes
 transactionSchema.index({ group: 1, status: 1 });
 transactionSchema.index({ group: 1, createdAt: -1 });
 
-// Pre-save middleware to validate split amounts
+// pre-save middleware to validate split amounts
 transactionSchema.pre('save', function(next) {
-  // If items are provided, derive participants and amounts from them
+  // if items are provided, derive participants and amounts from them
   if (this.items && this.items.length > 0) {
-    const map = {}; // userId -> amount
+    const map = {}; // userid -> amount
     this.items.forEach(it => {
       const price = Number(it.price || 0) * Number(it.quantity || 1);
       const assignees = (it.assignees || []).map(a => a.toString());
@@ -221,7 +232,7 @@ transactionSchema.pre('save', function(next) {
 
     // set participants array based on map
     this.participants = Object.keys(map).map(k => ({ user: k, amount: Math.round(map[k] * 100) / 100 }));
-    // If amount wasn't provided or is zero, set it to the sum of item prices
+    // if amount wasn't provided or is zero, set it to the sum of item prices
     const sumItems = Object.values(map).reduce((s, v) => s + v, 0);
     if (!this.amount || this.amount <= 0) {
       this.amount = Math.round(sumItems * 100) / 100;
@@ -238,16 +249,16 @@ transactionSchema.pre('save', function(next) {
   next();
 });
 
-// Method to calculate equal split
+// method to calculate equal split
 transactionSchema.methods.calculateEqualSplit = function() {
   if (this.participants.length === 0) return;
   
   const amountPerPerson = this.amount / this.participants.length;
   this.participants.forEach(participant => {
-    participant.amount = Math.round(amountPerPerson * 100) / 100; // Round to 2 decimals
+    participant.amount = Math.round(amountPerPerson * 100) / 100; // round to 2 decimals
   });
   
-  // Handle rounding differences
+  // handle rounding differences
   const totalCalculated = this.participants.reduce((sum, p) => sum + p.amount, 0);
   const difference = Math.round((this.amount - totalCalculated) * 100) / 100;
   
@@ -256,7 +267,7 @@ transactionSchema.methods.calculateEqualSplit = function() {
   }
 };
 
-// Method to validate percentage split
+// method to validate percentage split
 transactionSchema.methods.validatePercentageSplit = function() {
   const totalPercentage = this.participants.reduce((sum, participant) => {
     return sum + (participant.percentage || 0);
@@ -273,21 +284,21 @@ transactionSchema.methods.validatePercentageSplit = function() {
   });
 };
 
-// Method to validate participant amounts
+// method to validate participant amounts
 transactionSchema.methods.validateParticipantAmounts = function() {
   const totalParticipantAmount = this.participants.reduce((sum, participant) => {
     return sum + participant.amount;
   }, 0);
   
   const difference = Math.abs(totalParticipantAmount - this.amount);
-  if (difference > 0.01) { // Allow for small rounding differences
+  if (difference > 0.01) { // allow for small rounding differences
     throw new Error(
       `Participant amounts (${totalParticipantAmount}) do not match transaction amount (${this.amount})`
     );
   }
 };
 
-// Method to mark participant as paid
+// method to mark participant as paid
 transactionSchema.methods.markParticipantPaid = function(userId, paid = true) {
   const participant = this.participants.find(
     p => p.user.toString() === userId.toString()
@@ -300,7 +311,7 @@ transactionSchema.methods.markParticipantPaid = function(userId, paid = true) {
   participant.paid = paid;
   participant.paidAt = paid ? new Date() : null;
   
-  // Check if transaction is fully settled
+  // check if transaction is fully settled
   const allPaid = this.participants.every(p => p.paid);
   if (allPaid && this.status !== 'settled') {
     this.status = 'settled';
@@ -313,14 +324,14 @@ transactionSchema.methods.markParticipantPaid = function(userId, paid = true) {
   return this.save();
 };
 
-// Method to add approval
+// method to add approval
 transactionSchema.methods.addApproval = function(userId, approved, comment = '') {
-  // Remove existing approval from this user
+  // remove existing approval from this user
   this.approvals = this.approvals.filter(
     approval => approval.user.toString() !== userId.toString()
   );
   
-  // Add new approval
+  // add new approval
   this.approvals.push({
     user: userId,
     approved: approved,
@@ -328,7 +339,7 @@ transactionSchema.methods.addApproval = function(userId, approved, comment = '')
     comment: comment
   });
   
-  // Check if all participants have approved
+  // check if all participants have approved
   if (approved && this.status === 'pending') {
     const allParticipantsApproved = this.participants.every(participant => {
       return this.approvals.some(approval => 
@@ -345,7 +356,7 @@ transactionSchema.methods.addApproval = function(userId, approved, comment = '')
   return this.save();
 };
 
-// Static method to get user's balance in a group
+// static method to get user's balance in a group
 transactionSchema.statics.getUserGroupBalance = async function(userId, groupId) {
   const result = await this.aggregate([
     {

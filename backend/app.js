@@ -1,5 +1,5 @@
-// Apply runtime mitigations for known upstream advisories before loading validation libs
-// The mitigation file is optional for fresh clones; load it if present and warn if missing.
+// apply runtime mitigations for known upstream advisories before loading validation libs
+// the mitigation file is optional for fresh clones; load it if present and warn if missing.
 try {
   require('./utils/validator-mitigation');
 } catch (err) {
@@ -33,25 +33,34 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS (relaxed in app; server can override if needed)
+// cors (relaxed in app; server can override if needed)
 app.use(cors({ origin: true, credentials: true }));
 
-// Body parser
+// body parser
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Routes
+// development-only request logger (keeps production logs quiet)
+if ((process.env.NODE_ENV || 'development') === 'development') {
+  app.use((req, res, next) => {
+    // keep this concise to avoid noisy logs in development
+    console.debug && console.debug(`${req.method} ${req.path}`);
+    next();
+  });
+}
+
+// routes
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/users', friendsRoutes);
 
-// Health
+// health
 app.get('/health', (req, res) => {
   res.json({ success: true, message: 'Splitsy API is running', timestamp: new Date().toISOString() });
 });
 
-// Global error handler (basic)
+// global error handler (basic)
 app.use((err, req, res, next) => {
   console.error('App error handler:', err);
   res.status(err.status || 500).json({ success: false, message: err.message || 'Server error' });

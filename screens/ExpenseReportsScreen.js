@@ -37,7 +37,7 @@ const ExpenseReportsScreen = ({ visible, onClose }) => {
     const now = new Date();
     let startDate = new Date();
 
-    switch (selectedPeriod) {
+  switch (selectedPeriod) {
       case 'week':
         startDate.setDate(now.getDate() - 7);
         break;
@@ -52,7 +52,7 @@ const ExpenseReportsScreen = ({ visible, onClose }) => {
         break;
     }
 
-    return transactions.filter(t => {
+  return transactions.filter(t => {
       const transactionDate = new Date(t.date);
       const categoryMatch = selectedCategory === 'all' || t.category === selectedCategory;
       const dateMatch = transactionDate >= startDate;
@@ -66,13 +66,13 @@ const ExpenseReportsScreen = ({ visible, onClose }) => {
     const transactionCount = filtered.length;
     const averageExpense = transactionCount > 0 ? totalExpenses / transactionCount : 0;
 
-    const categoryBreakdown = {};
+  const categoryBreakdown = {};
     filtered.forEach(t => {
       const cat = t.category || 'other';
       categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + t.amount;
     });
 
-    const groupBreakdown = {};
+  const groupBreakdown = {};
     filtered.forEach(t => {
       const group = groups.find(g => g.id === t.groupId);
       const groupName = group ? group.name : 'Unknown Group';

@@ -1,15 +1,13 @@
+// transaction controller: handles creating, listing, updating, and settling transactions
+// comments describe inputs/outputs at a high level
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 
 
 
 async function createTransaction(req, res) {
-  console.log("Incoming POST /api/transactions body:", req.body);
-
-    // Debug logs to help diagnose incoming submissions
-    console.log('createTransaction called - headers:', req.headers && { authorization: req.headers.authorization });
-    try { console.log('createTransaction body:', JSON.stringify(req.body)); } catch (e) { console.log('createTransaction body (non-serializable)'); }
-    console.log('req.user:', req.user ? req.user._id : null);
+  // create a new transaction from the request body
+  // basic validations to ensure required fields are present
   try {
     const {
       description,
@@ -34,13 +32,13 @@ async function createTransaction(req, res) {
       return res.status(400).json({ message: 'valid payer id is required' });
     }
 
-    const actualGroup = group || payer;
+  const actualGroup = group || payer;
 
     const mappedParticipants = participants.map(p => 
       typeof p === 'string' ? { user: p, paid: false } : { user: p.user, paid: false }
     );
 
-    const tx = new Transaction({
+  const tx = new Transaction({
       description,
       amount,
       currency: currency || 'USD',
@@ -54,8 +52,8 @@ async function createTransaction(req, res) {
       createdBy: req.user ? req.user._id : payer
     });
 
-    const saved = await tx.save();
-    console.log('Transaction saved:', saved);
+  const saved = await tx.save();
+  console.log('Transaction saved:', saved);
 
     const populated = await Transaction.findById(saved._id)
       .populate('payer', 'name email')
@@ -69,7 +67,7 @@ async function createTransaction(req, res) {
   }
 }
 
-// Get list of transactions with optional filters + pagination
+  // get list of transactions with optional filters and pagination
 async function getTransactions(req, res) {
   try {
     const {
@@ -85,7 +83,7 @@ async function getTransactions(req, res) {
       sort = '-createdAt'
     } = req.query;
 
-    const filter = {};
+  const filter = {};
     if (group && mongoose.Types.ObjectId.isValid(group)) filter.group = group;
     if (payer && mongoose.Types.ObjectId.isValid(payer)) filter.payer = payer;
     if (participant && mongoose.Types.ObjectId.isValid(participant)) filter['participants.user'] = participant;
@@ -97,7 +95,7 @@ async function getTransactions(req, res) {
       if (endDate) filter.createdAt.$lte = new Date(endDate);
     }
 
-    const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
+  const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
     const [total, transactions] = await Promise.all([
       Transaction.countDocuments(filter),
       Transaction.find(filter)
@@ -121,7 +119,7 @@ async function getTransactions(req, res) {
   }
 }
 
-// Get a single transaction by id
+// get a single transaction by id
 async function getTransactionById(req, res) {
   try {
     const { id } = req.params;
@@ -141,7 +139,7 @@ async function getTransactionById(req, res) {
   }
 }
 
-// Update a transaction (partial update)
+// update a transaction (partial update)
 async function updateTransaction(req, res) {
   try {
     const { id } = req.params;
@@ -165,7 +163,7 @@ async function updateTransaction(req, res) {
   }
 }
 
-// Delete a transaction
+// delete a transaction
 async function deleteTransaction(req, res) {
   try {
     const { id } = req.params;
@@ -181,7 +179,7 @@ async function deleteTransaction(req, res) {
   }
 }
 
-// Mark a participant as paid/unpaid
+// mark a participant as paid or unpaid for a transaction
 async function markParticipantPaid(req, res) {
   try {
     const { id } = req.params; // transaction id
@@ -203,7 +201,7 @@ async function markParticipantPaid(req, res) {
   }
 }
 
-// Add approval for a transaction
+// add approval for a transaction
 async function addApproval(req, res) {
   try {
     const { id } = req.params; // transaction id
@@ -225,7 +223,7 @@ async function addApproval(req, res) {
   }
 }
 
-// Get user's balance within a group
+// get a user's balance within a group
 async function getUserGroupBalance(req, res) {
   try {
     const { userId, groupId } = req.params;
@@ -251,4 +249,3 @@ module.exports = {
   addApproval,
   getUserGroupBalance
 };
-console.log("transactController =", module.exports);

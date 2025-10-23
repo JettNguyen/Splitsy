@@ -8,7 +8,7 @@ import {
   SafeAreaView
 } from 'react-native';
 
-//toast notification component with animations
+// toast notification with smooth show/hide animations
 const Toast = ({ 
   visible, 
   message, 
@@ -21,7 +21,7 @@ const Toast = ({
 
   useEffect(() => {
     if (visible) {
-      //show animation
+      // animate toast in
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -35,7 +35,7 @@ const Toast = ({
         }),
       ]).start();
 
-      //auto hide after duration
+    // automatically hide after duration
       const timer = setTimeout(() => {
         hideToast();
       }, duration);

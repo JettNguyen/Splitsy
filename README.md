@@ -34,7 +34,10 @@ npm install
 #### 2. Use .env file (provided by me)
 - Ensure it is named `.env` with the dot
 
-#### 3. Start the Application
+#### 3. Update IP in `app.config.js`
+- If you do not know your IP, run ipconfig (Windows) or ifconfig (Mac)
+
+#### 4. Start the Application
 ```bash
 #terminal 1: start backend server
 cd backend
@@ -42,11 +45,13 @@ node server.js
 # OR use this: backend server that refreshes upon every change
 npm install -g nodemon
 nodemon server. js
-
+```
+```bash
 #terminal 2: start frontend
 cd ..
 npm start
-
+```
+```bash
 #terminal 3: start python ocr microservice
 
 cd backend/python_ocr
@@ -61,17 +66,17 @@ pip install flask flask-cors pillow pytesseract werkzeug    #install dependencie
 python main.py      #run the flask server
 ```
 
-#### 4. Connect Your Device
+#### 5. Connect Your Device
 - Scan the QR code with Expo Go app
 
 ## Tech Stack
 
 - **Frontend**: React Native, Expo
 - **Backend**: Node.js, Express, MongoDB
-- **Database**: MongoDB Atlas (cloud) or MongoDB (local)
+- **Database**: MongoDB
 - **Authentication**: JWT tokens
 - **OCR**: Receipt scanning and data extraction
-- **Icons**: Expo Vector Icons (Ionicons)
+- **Icons**: Expo Vector Icons
 
 ## API Endpoints
 

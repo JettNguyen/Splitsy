@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useData } from '../context/ApiDataContext';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
+import AppStyles from '../styles/AppStyles';
 
 const SettlementScreen = ({ visible, onClose }) => {
   const { theme } = useTheme();
@@ -101,8 +102,8 @@ const SettlementScreen = ({ visible, onClose }) => {
               text: 'Settle',
               onPress: async () => {
                 try {
-                  // Mark each transaction as paid for the current participant.
-                  // Backend will mark participant.paid and update transaction status.
+                  // mark each transaction as paid for the current participant
+                  // backend will mark participant.paid and update transaction status
                   for (const transaction of selectedSettlement.transactions) {
                     await markTransactionPaid(transaction.id, currentUser.id, true);
                   }
@@ -119,10 +120,13 @@ const SettlementScreen = ({ visible, onClose }) => {
     );
   };
 
+  // open a payment app or fallback to a web url
   const openPaymentApp = (app, amount, recipientName) => {
+  // build simple deep links or web fallbacks
+    const name = String(recipientName || '').replace(/\s+/g, '');
     const urls = {
-      venmo: `venmo://paycharge?txn=pay&recipients=${recipientName.replace(' ', '')}&amount=${amount}&note=Splitsy%20Settlement`,
-      paypal: `https://paypal.me/${recipientName.replace(' ', '').toLowerCase()}/${amount}`,
+      venmo: `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(name)}&amount=${amount}&note=splitsy%20settlement`,
+      paypal: `https://paypal.me/${encodeURIComponent(name)}/${amount}`,
       zelle: 'https://www.zellepay.com/',
     };
 
@@ -130,7 +134,7 @@ const SettlementScreen = ({ visible, onClose }) => {
     if (url) {
       import('react-native').then(({ Linking }) => {
         Linking.openURL(url).catch(() => {
-          Alert.alert('App not found', `Please install ${app} or use the web version`);
+          Alert.alert('App not found', `please install ${app} or use the web version`);
         });
       });
     }
@@ -209,7 +213,7 @@ const SettlementScreen = ({ visible, onClose }) => {
         </TouchableOpacity>
       </View>
 
-      {/*transaction details*/}
+      {/* transaction details */}
       <View style={styles.transactionDetails}>
         <Text style={styles.transactionDetailsTitle}>Transactions:</Text>
         {settlement.transactions.slice(0, 3).map((transaction, index) => (
@@ -247,12 +251,10 @@ const SettlementScreen = ({ visible, onClose }) => {
 
         <ScrollView style={[styles.modalContent, { backgroundColor: theme.colors.background }]}>
           {settlements.length === 0 ? (
-            <View style={styles.emptyState}>
+            <View style={AppStyles.empty}>
               <Ionicons name="checkmark-circle" size={64} color={theme.colors.success} style={{ marginBottom: 16 }} />
-              <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>All Settled Up!</Text>
-              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                You don't have any outstanding balances with anyone.
-              </Text>
+              <Text style={[AppStyles.emptyTitle, { color: theme.colors.text }]}>All Settled Up!</Text>
+              <Text style={[AppStyles.emptyText, { color: theme.colors.textSecondary }]}>You don't have any outstanding balances with anyone.</Text>
             </View>
           ) : (
             <>
@@ -285,7 +287,7 @@ const SettlementScreen = ({ visible, onClose }) => {
           )}
         </ScrollView>
 
-        {/*settlement confirmation modal*/}
+        {/* settlement confirmation modal */}
         <Modal
           visible={!!selectedSettlement}
           transparent={true}

@@ -23,16 +23,16 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters'],
-    select: false // Don't include password in queries by default
+    select: false // don't include password in queries by default
   },
   avatar: {
     type: String,
-    default: null // URL or base64 string for profile picture
+    default: null // url or base64 string for profile picture
   },
   phoneNumber: {
     type: String,
     trim: true,
-    sparse: true // Allow multiple null values
+    sparse: true // allow multiple null values
   },
   preferences: {
     currency: {
@@ -74,8 +74,8 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Group'
   }],
-  // Friends array (references to other User documents).
-  // This field is required for friend-related controllers which populate('friends').
+  // friends array
+  // this field is required for friend-related controllers which populate('friends').
   friends: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -90,12 +90,12 @@ const userSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Virtual for user's full display name
+// virtual for user's full display name
 userSchema.virtual('displayName').get(function() {
   return this.name || this.email.split('@')[0];
 });
 
-// Transform _id to id and remove __v
+// transform _id to id and remove __v
 userSchema.set('toJSON', {
   transform: function(doc, ret) {
     ret.id = ret._id;
@@ -114,10 +114,10 @@ userSchema.set('toObject', {
   }
 });
 
-// Index for better query performance
+// index for better query performance
 userSchema.index({ 'groups': 1 });
 
-// Pre-save middleware to hash password
+// pre-save middleware to hash password
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
@@ -126,12 +126,12 @@ userSchema.pre('save', async function(next) {
   next();
 });
 
-// Method to check password
+// method to check password
 userSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Method to update last active
+// method to update last active
 userSchema.methods.updateLastActive = function() {
   this.lastActive = new Date();
   return this.save({ validateBeforeSave: false });

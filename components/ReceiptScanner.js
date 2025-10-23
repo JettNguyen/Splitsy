@@ -1,4 +1,4 @@
-// components/ReceiptScanner.js
+// components/receiptscanner.js
 // pick/take a photo → upload to flask /ocr → show parsed result → return to parent
 
 import React, { useState, useEffect } from 'react';
@@ -9,13 +9,14 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import Constants from 'expo-constants';
-const { IP_ADDRESS } = Constants.expoConfig.extra;
-
+const { IP_ADDRESS, PORT } = (Constants.expoConfig && Constants.expoConfig.extra) || {};
+const OCR_HOST = IP_ADDRESS || 'localhost';
+const OCR_PORT = PORT || '5000';
 // set this to your flask url
-// ios sim:      http://127.0.0.1:5000/ocr
-// android emu:  http://10.0.2.2:5000/ocr
-// real device:  http://<your-computer-ip>:5000/ocr
-const BACKEND_URL = `http://${IP_ADDRESS}:5000/ocr`;
+// ios sim: http://127.0.0.1:5000/ocr
+// android emu: http://10.0.2.2:5000/ocr
+// real device: http://<your-computer-ip>:5000/ocr
+const BACKEND_URL = `http://${OCR_HOST}:${OCR_PORT}/ocr`;
 
 const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   const { theme } = useTheme();
@@ -28,7 +29,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   });
   const [savedInfo, setSavedInfo] = useState({ saved_json_path: '', saved_image_path: '' });
 
-  // reset when modal closes
+  // reset state when modal closes
   useEffect(() => {
     if (!visible) {
       setIsProcessing(false);
@@ -39,7 +40,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
     }
   }, [visible]);
 
-  // upload image to flask and set parsed data
+  // upload image to the ocr backend and set parsed data
   const uploadToBackend = async (imageUri) => {
     try {
       setIsProcessing(true);
@@ -48,13 +49,13 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       const form = new FormData();
 
       if (Platform.OS === 'web') {
-        // web: need a real File
+        // web: need a real file blob
         const resp = await fetch(imageUri); // fetch blob from uri (can be blob: or data:)
         const blob = await resp.blob();
         const file = new File([blob], name, { type: blob.type || 'image/jpeg' });
         form.append('file', file);
       } else {
-        // native: append uri object
+  // native: append uri object
         const ext = name.split('.').pop()?.toLowerCase();
         const type =
           ext === 'png' ? 'image/png' :
@@ -63,7 +64,7 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
         form.append('file', { uri: imageUri, name, type });
       }
 
-      // let fetch set the multipart boundary (no manual content-type)
+  // let fetch set the multipart boundary (no manual content-type)
       const res = await fetch(BACKEND_URL, { method: 'POST', body: form });
 
       if (!res.ok) {
@@ -135,8 +136,8 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   };
 
   // edit helpers
-  // const addItem = () =>
-  //   setExtractedData(p => ({ ...p, items: [...p.items, { name: '', price: '', qty: 1 }] }));
+  // const additem = () =>
+  // setextracteddata(p => ({ ...p, items: [...p.items, { name: '', price: '', qty: 1 }] }));
 
   const addItem = () =>
   setExtractedData(prev => {
@@ -146,10 +147,10 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
     return { ...prev, items: [...prev.items, newItem] };
   });
 
-  // const removeItem = (i) =>
-  //   setExtractedData(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }));
+  // const removeitem = (i) =>
+  // setextracteddata(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }));
 
-  //also updates subtotal value 
+  // also updates subtotal value
   const removeItem = (i) =>
   setExtractedData(prev => {
     const removedItem = prev.items[i];
@@ -162,8 +163,8 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
     return { ...prev, items: updatedItems, subtotal: newSubtotal.toFixed(2) };
   });
 
-  // const updateItem = (i, field, val) =>
-  //   setExtractedData(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [field]: val } : it) }));
+  // const updateitem = (i, field, val) =>
+  // setextracteddata(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [field]: val } : it) }));
 
   const updateItem = (i, field, val) =>
   setExtractedData(prev => {
@@ -183,7 +184,8 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       ...prev,
       items: updatedItems,
       subtotal: subtotal.toFixed(2),
-      total: newTotal
+      // set total equal to subtotal for now (no tax/fees extracted)
+      total: subtotal.toFixed(2)
     };
   });
 
@@ -224,9 +226,9 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
               <Text style={[{ fontSize: 22, fontWeight: '700', marginBottom: 8, color: theme.colors.text }]}>
                 Scan Receipt
               </Text>
-              {/* <Text style={[{ fontSize: 15, marginBottom: 24, color: theme.colors.textSecondary, textAlign: 'center' }]}>
-                we’ll read the text, save a json on the server, and let you edit the details
-              </Text> */}
+              {/* <text style={[{ fontsize: 15, marginbottom: 24, color: theme.colors.textsecondary, textalign: 'center' }]}>
+we’ll read the text, save a json on the server, and let you edit the details
+</text> */}
 
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: theme.colors.primary, marginBottom: 12 }]}
@@ -269,21 +271,21 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
 
             {capturedImage ? <Image source={{ uri: capturedImage }} style={styles.previewImage} /> : null}
 
-            {/* {(savedInfo.saved_json_path || savedInfo.saved_image_path) && (
-              <View style={[styles.infoBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>saved on server:</Text>
-                {!!savedInfo.saved_json_path && (
-                  <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                    json: {savedInfo.saved_json_path}
-                  </Text>
-                )}
-                {!!savedInfo.saved_image_path && (
-                  <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                    image: {savedInfo.saved_image_path}
-                  </Text>
-                )}
-              </View>
-            )} */}
+            {/* {(savedinfo.saved_json_path || savedinfo.saved_image_path) && (
+<view style={[styles.infobox, { backgroundcolor: theme.colors.card, bordercolor: theme.colors.border }]}>
+<text style={[styles.infotext, { color: theme.colors.textsecondary }]}>saved on server:</text>
+{!!savedinfo.saved_json_path && (
+<text style={[styles.infotext, { color: theme.colors.textsecondary }]}>
+json: {savedinfo.saved_json_path}
+</text>
+)}
+{!!savedinfo.saved_image_path && (
+<text style={[styles.infotext, { color: theme.colors.textsecondary }]}>
+image: {savedinfo.saved_image_path}
+</text>
+)}
+</view>
+)} */}
 
             <View style={[styles.formSection, { backgroundColor: theme.colors.card }]}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text, textAlign: 'center' }]}>Receipt Details</Text>

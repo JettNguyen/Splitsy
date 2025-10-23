@@ -1,10 +1,10 @@
-// TEMPORARY FILE TO GET THINGS WORKING - REPLACE MOCKS WITH REAL MODELS
+// temporary file to get things working - replace mocks with real models
 
 
 const { validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 
-// Mock models (replace with your real Mongoose models)
+// mock models (replace with your real mongoose models)
 const FriendRequest = mongoose.model('FriendRequest', new mongoose.Schema({
   from: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   to: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -12,7 +12,7 @@ const FriendRequest = mongoose.model('FriendRequest', new mongoose.Schema({
   status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' }
 }));
 
-// Send a friend request
+// send a friend request
 exports.sendFriendRequest = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -21,7 +21,7 @@ exports.sendFriendRequest = async (req, res) => {
   const fromId = req.user.id;
 
   try {
-    // Prevent sending request to yourself
+    // prevent sending request to yourself
     if (fromId === toId) return res.status(400).json({ message: 'Cannot send request to yourself' });
 
     const existing = await FriendRequest.findOne({ from: fromId, to: toId, status: 'pending' });
@@ -35,7 +35,7 @@ exports.sendFriendRequest = async (req, res) => {
   }
 };
 
-// List all friend requests for current user
+// list all friend requests for the current user
 exports.listFriendRequests = async (req, res) => {
   const userId = req.user.id;
   try {
@@ -47,7 +47,7 @@ exports.listFriendRequests = async (req, res) => {
   }
 };
 
-// Accept a friend request
+// accept a friend request
 exports.acceptFriendRequest = async (req, res) => {
   const { requestId } = req.params;
   try {
@@ -65,7 +65,7 @@ exports.acceptFriendRequest = async (req, res) => {
   }
 };
 
-// Decline a friend request
+// decline a friend request
 exports.declineFriendRequest = async (req, res) => {
   const { requestId } = req.params;
   try {

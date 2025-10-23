@@ -71,7 +71,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
       // Check if the friends array exists and has changed
       if (result.user && Array.isArray(result.user.friends)) {
         setFriends(result.user.friends); // update UI
-        alert(`${friendEmail} has been added to your friends list!`);
+        Alert.alert("Success!", `${friendEmail} has been added to your friends list!`);
         setFriendEmail('');
         setShowAddFriend(false);
       } else {

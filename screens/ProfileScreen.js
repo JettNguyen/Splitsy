@@ -13,30 +13,28 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
-
-// context imports
 import { useUser } from '../context/UserContext';
 import { useData } from '../context/ApiDataContext';
 import { useTheme } from '../context/ThemeContext';
 
-// profile and settings screen component
 const ProfileScreen = ({ 
   onNavigateToPaymentMethods,
   onNavigateToNotifications,
   onNavigateToExpenseReports,
-  onNavigateToGroupManagement 
+  onNavigateToGroupManagement,
+  userGroups = []
 }) => {
   const { currentUser, logoutUser, updateUser } = useUser();
   const { calculateUserBalance, userBalances } = useData();
   const { theme, isDarkMode, toggleTheme } = useTheme();
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showGroupPicker, setShowGroupPicker] = useState(false);
   const [editForm, setEditForm] = useState({
     name: currentUser?.name || '',
     email: currentUser?.email || '',
     phone: currentUser?.phone || ''
   });
 
-  // prefer server-provided balances when available; otherwise fall back to local calculation
   const serverSummary = userBalances && userBalances.summary ? userBalances.summary : null;
   const balanceData = serverSummary ? {
     owed: serverSummary.totalOwedToMe || 0,
@@ -105,16 +103,16 @@ const ProfileScreen = ({
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right', 'bottom']}> 
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['left', 'right', 'bottom']}> 
       <ScrollView style={[styles.scrollContainer, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.scrollContent}>
-        {/* profile header */}
-        <View style={[styles.profileHeader, { backgroundColor: theme.colors.card }]}>
-          <View style={[styles.avatarContainer, { backgroundColor: theme.colors.primary }]}>
+        {/* profile header moved inside ScrollView so it scrolls with content */}
+        <View style={[styles.profileHeader, { backgroundColor: theme.colors.card }]}> 
+          <View style={[styles.avatarContainer, { backgroundColor: theme.colors.primary }]}> 
             <Text style={styles.avatarText}>{currentUser?.avatar || currentUser?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
           </View>
           <Text style={[styles.userName, { color: theme.colors.text }]}>{currentUser?.name}</Text>
           <Text style={[styles.userEmail, { color: theme.colors.textSecondary }]}>{currentUser?.email}</Text>
-          
+
           {/* balance summary: show net balance only (server-preferred when available) */}
           <View style={[styles.balanceContainer, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.balanceItem}>
@@ -177,15 +175,22 @@ const ProfileScreen = ({
           <MenuItem
             icon="people-outline"
             title="Manage Groups"
-            subtitle="View and edit your groups"
+            subtitle={userGroups && userGroups.length ? `You are a member of ${userGroups.length} group(s)` : 'No groups yet'}
             onPress={() => {
-              Alert.alert(
-                'Manage Groups',
-                'You can manage your groups from the Groups tab. Tap on any group to edit it.',
-                [{ text: 'OK' }]
-              );
+              if (userGroups && userGroups.length) {
+                setShowGroupPicker(true);
+              } else if (typeof onNavigateToGroupManagement === 'function') {
+                onNavigateToGroupManagement();
+              } else {
+                Alert.alert(
+                  'Manage Groups',
+                  'You do not have any groups yet. Create one from the Groups tab.',
+                  [{ text: 'OK' }]
+                );
+              }
             }}
           />
+          {/* group preview removed from settings page to declutter UI; use Manage Groups to pick a group */}
           <MenuItem
             icon="bar-chart-outline"
             title="Expense Reports"
@@ -261,6 +266,53 @@ const ProfileScreen = ({
           </ScrollView>
         </SafeAreaView>
       </Modal>
+      {/* Group picker modal (opened from Manage Groups) */}
+      <Modal
+        visible={showGroupPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowGroupPicker(false)}
+      >
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}> 
+          <View style={styles.modalHandleWrap}>
+            <View style={[styles.modalHandle, { backgroundColor: theme.colors.textTertiary }]} />
+          </View>
+          <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}> 
+            <TouchableOpacity onPress={() => setShowGroupPicker(false)}>
+              <View style={[styles.closeIconContainer, { backgroundColor: theme.colors.surface }]}>
+                <Text style={[styles.closeIconText, { color: theme.colors.text }]}>×</Text>
+              </View>
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Select a Group</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView style={[styles.modalContent, { backgroundColor: theme.colors.background }]}> 
+            <View style={{ padding: 16 }}>
+              {userGroups.map(g => (
+                <TouchableOpacity
+                  key={g._id || g.id}
+                  style={[styles.groupPreviewItem, { backgroundColor: theme.colors.card }]}
+                  onPress={() => {
+                    setShowGroupPicker(false);
+                    if (typeof onNavigateToGroupManagement === 'function') {
+                      onNavigateToGroupManagement(g._id || g.id);
+                    }
+                  }}
+                >
+                  <View style={[styles.groupPreviewIcon, { backgroundColor: theme.colors.primary }]}> 
+                    <Text style={styles.groupPreviewIconText}>{(g.name || 'G')[0].toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.groupPreviewText}>
+                    <Text style={[styles.groupPreviewName, { color: theme.colors.text }]}>{g.name}</Text>
+                    <Text style={[styles.groupPreviewSubtitle, { color: theme.colors.textSecondary }]}>{g.members ? `${g.members.length} members` : 'Group'}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -277,7 +329,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 200,
-    paddingTop: 0,
+    paddingTop: 25,
   },
   profileHeader: {
     alignItems: 'center',
@@ -288,8 +340,7 @@ const styles = StyleSheet.create({
     shadowColor: '#673e9dff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: 5,
   },
   avatarContainer: {
     width: 80,
@@ -322,14 +373,6 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 0.5,
     borderColor: 'rgba(148, 163, 184, 0.2)',
-    shadowColor: '#673e9dff',
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
   },
   balanceItem: {
     alignItems: 'center',
@@ -387,9 +430,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#673e9dff',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
   },
   menuItem: {
     paddingHorizontal: 16,
@@ -401,9 +443,8 @@ const styles = StyleSheet.create({
       width: 0,
       height: 0,
     },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   themeToggleContainer: {
     paddingHorizontal: 16,
@@ -466,6 +507,17 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     opacity: 0.6,
   },
+  closeIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeIconText: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -474,6 +526,46 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  groupListPreview: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  groupPreviewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  groupPreviewIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  groupPreviewIconText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  groupPreviewText: {
+    flex: 1,
+  },
+  groupPreviewName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  groupPreviewSubtitle: {
+    fontSize: 12,
+  },
+  moreGroupsText: {
+    marginLeft: 12,
+    marginTop: 4,
+    fontSize: 12,
   },
   modalCloseButton: {
     fontSize: 16,
@@ -499,9 +591,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(148, 163, 184, 0.2)',
     shadowColor: '#673e9dff',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   formLabel: {
     fontSize: 14,

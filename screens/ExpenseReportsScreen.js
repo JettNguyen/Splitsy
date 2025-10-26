@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -14,12 +16,100 @@ import { useUser } from '../context/UserContext';
 
 const ExpenseReportsScreen = ({ visible, onClose }) => {
   const { theme } = useTheme();
-  const { getUserTransactions, getUserGroups } = useData();
+  const { getUserTransactions, getUserGroups, loadTransactions } = useData();
+  const translateY = useRef(new Animated.Value(0)).current;
+  const dismissThreshold = 120;
+
+  const panResponder = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gestureState) => {
+      // start responding only to vertical downward swipes
+      return Math.abs(gestureState.dy) > 5 && Math.abs(gestureState.dx) < 10 && gestureState.dy > 0;
+    },
+    onPanResponderMove: Animated.event([
+      null,
+      { dy: translateY }
+    ], { useNativeDriver: false }),
+    onPanResponderRelease: (_, gesture) => {
+      if (gesture.dy > dismissThreshold || gesture.vy > 0.8) {
+        // animate out and call onClose
+        Animated.timing(translateY, {
+          toValue: 1000,
+          duration: 200,
+          useNativeDriver: false,
+        }).start(() => {
+          translateY.setValue(0);
+          onClose && onClose();
+        });
+      } else {
+        // spring back
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: false,
+        }).start();
+      }
+    }
+  })).current;
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  const transactions = getUserTransactions();
+  // local cache of transactions for the current user (loaded per-group)
+  const [userTransactionsLocal, setUserTransactionsLocal] = useState([]);
+
+  const transactionsFromContext = getUserTransactions();
   const groups = getUserGroups();
+
+  // fetch transactions for each group the user is in when the modal becomes visible
+  const fetchedWhileVisible = useRef(false);
+
+  useEffect(() => {
+    let mounted = true;
+    // only trigger fetch when modal becomes visible; guard to avoid loops
+    if (!visible) {
+      fetchedWhileVisible.current = false;
+      return () => { mounted = false; };
+    }
+
+    if (fetchedWhileVisible.current) return () => { mounted = false; };
+    fetchedWhileVisible.current = true;
+
+    const fetchUserTx = async () => {
+      try {
+        // prefer context-provided user transactions if already present
+        if (Array.isArray(transactionsFromContext) && transactionsFromContext.length > 0) {
+          if (mounted) setUserTransactionsLocal(transactionsFromContext);
+          return;
+        }
+
+        const myGroups = Array.isArray(groups) ? groups : [];
+        if (myGroups.length === 0) {
+          if (mounted) setUserTransactionsLocal([]);
+          return;
+        }
+
+        const results = await Promise.all(myGroups.map(g => loadTransactions(g.id || g._id || g)));
+        const combined = results.flat().filter(Boolean);
+
+        // dedupe by id/_id
+        const map = new Map();
+        combined.forEach(tx => {
+          const id = tx && (tx._id || tx.id);
+          if (id && !map.has(String(id))) map.set(String(id), tx);
+        });
+
+        const merged = Array.from(map.values());
+        if (mounted) setUserTransactionsLocal(merged);
+      } catch (err) {
+        console.warn('ExpenseReports: failed to load user transactions', err && err.message ? err.message : err);
+        if (mounted) setUserTransactionsLocal(transactionsFromContext || []);
+      }
+    };
+
+    fetchUserTx();
+    return () => { mounted = false; };
+  }, [visible]);
+
+  // use locally loaded transactions first, fallback to data context
+  const transactions = Array.isArray(userTransactionsLocal) && userTransactionsLocal.length > 0 ? userTransactionsLocal : (transactionsFromContext || []);
 
   const periods = [
     { id: 'week', label: 'This Week' },
@@ -188,20 +278,26 @@ const ExpenseReportsScreen = ({ visible, onClose }) => {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <View style={[styles.iconContainer, { backgroundColor: theme.colors.surface }]}>
-              <Text style={[styles.iconText, { color: theme.colors.text }]}>←</Text>
-            </View>
-          </TouchableOpacity>
-          
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            Expense Reports
-          </Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}> 
+        <Animated.View style={{ transform: [{ translateY }] }} {...panResponder.panHandlers}>
+          <View style={styles.modalHandleWrap}>
+            <View style={[styles.modalHandle, { backgroundColor: theme.colors.textTertiary }]} />
+          </View>
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}> 
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <View style={[styles.iconContainer, { backgroundColor: theme.colors.surface }]}>
+                <Text style={[styles.iconText, { color: theme.colors.text }]}>×</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+              Expense Reports
+            </Text>
 
-          <View style={{ width: 40 }} />
-        </View>
+            <View style={{ width: 40 }} />
+          </View>
+
+        </Animated.View>
 
         <ScrollView 
           style={styles.content} 
@@ -328,6 +424,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  modalHandleWrap: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  modalHandle: {
+    width: 48,
+    height: 5,
+    borderRadius: 3,
+    opacity: 0.6,
+  },
   content: {
     flex: 1,
     padding: 20,
@@ -393,9 +499,8 @@ const styles = StyleSheet.create({
       width: 0,
       height: 0,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
   },
   summaryValue: {
     fontSize: 20,
@@ -427,8 +532,7 @@ const styles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowRadius: 5,
   },
   breakdownItem: {
     marginBottom: 16,

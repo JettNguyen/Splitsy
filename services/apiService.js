@@ -1,8 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { Linking } from 'react-native';
 
-// api service for communicating with the backend
-// backend server url (uses expo extras in development)
 const { IP_ADDRESS, PORT, PROD_API_URL } = (Constants.expoConfig && Constants.expoConfig.extra) || {};
 const devIp = IP_ADDRESS || 'localhost';
 const devPort = PORT || '3000';
@@ -10,18 +9,14 @@ export const API_BASE_URL = __DEV__
   ? `http://${devIp}:${devPort}/api`
   : PROD_API_URL;
 
-// note: api_base_url is configured from expo constants in development.
-
 class ApiService {
   constructor() {
     this.baseURL = API_BASE_URL;
     this.token = null;
   }
 
-  // initialize the service and load stored token
   async init() {
     try {
-      // prefer in-memory token when present to avoid races with async storage writes
       if (this.token) return;
 
       const token = await AsyncStorage.getItem('authToken');
@@ -31,7 +26,6 @@ class ApiService {
     }
   }
 
-  // set authentication token
   async setAuthToken(token) {
     this.token = token;
     try {
@@ -42,7 +36,6 @@ class ApiService {
     }
   }
 
-  // get authentication headers
   getAuthHeaders() {
     const headers = {
       'Content-Type': 'application/json',
@@ -235,6 +228,25 @@ class ApiService {
     });
   }
 
+  // Linking helpers (exposed for UI components)
+  async linkCanOpenURL(url) {
+    try {
+      return await Linking.canOpenURL(url);
+    } catch (err) {
+      console.warn('linkCanOpenURL error', err);
+      return false;
+    }
+  }
+
+  async linkOpenURL(url) {
+    try {
+      return await Linking.openURL(url);
+    } catch (err) {
+      console.warn('linkOpenURL error', err);
+      throw err;
+    }
+  }
+
   // friend methods
   // add friend method
   async addFriend(friendEmail) {
@@ -345,7 +357,9 @@ class ApiService {
   // the backend settle endpoint expects { userid?, paid?, paymentmethod? }.
   // we keep this method simple and explicit so callers can pass the user being marked.
   async markTransactionPaid(transactionId, userId = null, paid = true, paymentMethod = null) {
-    const body = { paymentMethod };
+    // backend expects paymentMethodId in the body when provided
+    const body = {};
+    if (paymentMethod) body.paymentMethodId = paymentMethod;
     if (userId) body.userId = userId;
     body.paid = paid;
 

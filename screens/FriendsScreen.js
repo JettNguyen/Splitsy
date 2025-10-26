@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,9 @@ import {
   Alert,
   FlatList,
   Modal,
-  Linking,
-  ActivityIndicator
+  ActivityIndicator,
+  Animated,
+  Easing
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,11 +18,41 @@ import { StyleSheet } from 'react-native';
 import AppStyles, { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
 import apiService from '../services/apiService';
 
+const copyToClipboard = async (text) => {
+  try {
+    const expoClip = require('expo-clipboard');
+    if (expoClip && typeof expoClip.setStringAsync === 'function') {
+      await expoClip.setStringAsync(String(text));
+      return true;
+    }
+  } catch (e) {}
+  try {
+    const rn = require('@react-native-clipboard/clipboard');
+    if (rn && typeof rn.setString === 'function') {
+      rn.setString(String(text));
+      return true;
+    }
+    if (rn && typeof rn.setStringAsync === 'function') {
+      await rn.setStringAsync(String(text));
+      return true;
+    }
+  } catch (e) {}
+  try {
+    const RN = require('react-native');
+    const Clip = RN.Clipboard || RN.ClipboardManager;
+    if (Clip && typeof Clip.setString === 'function') {
+      Clip.setString(String(text));
+      return true;
+    }
+  } catch (e) {}
+  return false;
+};
+
 import { useData } from '../context/ApiDataContext';
 import { useUser } from '../context/UserContext'; // check authentication state
 
 function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }) {
-  const { deleteGroup: deleteGroupAPI } = useData();
+  const { deleteGroup: deleteGroupAPI, userBalances } = useData();
   const [activeTab, setActiveTab] = useState('friends');
   const [requests, setRequests] = useState({ incoming: [], outgoing: [] });
   const [showAddFriend, setShowAddFriend] = useState(false);
@@ -34,13 +65,71 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
   const [selectedFriendForDetails, setSelectedFriendForDetails] = useState(null);
   const [showFriendDetails, setShowFriendDetails] = useState(false);
   const [friendBalance, setFriendBalance] = useState(null);
-  const [friendBalances, setFriendBalances] = useState({}); // store balances for all friends
-
-  // payment modal & options
+  const [friendBalances, setFriendBalances] = useState({});
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentOptions, setPaymentOptions] = useState([]);
   const [isLoadingPaymentOptions, setIsLoadingPaymentOptions] = useState(false);
   const [paymentTargetUser, setPaymentTargetUser] = useState(null);
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const modalScale = useRef(new Animated.Value(0.96)).current;
+  const [isPaymentMounted, setIsPaymentMounted] = useState(showPaymentModal);
+  const [showZelleInstructions, setShowZelleInstructions] = useState(false);
+  const [zelleMethodForInstructions, setZelleMethodForInstructions] = useState(null);
+
+  useEffect(() => {
+    if (showPaymentModal) {
+      setIsPaymentMounted(true);
+      overlayOpacity.setValue(0);
+      modalScale.setValue(0.96);
+      Animated.parallel([
+        Animated.timing(overlayOpacity, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.spring(modalScale, { toValue: 1, friction: 8, useNativeDriver: true }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(overlayOpacity, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(modalScale, { toValue: 0.96, duration: 160, useNativeDriver: true }),
+      ]).start(() => setIsPaymentMounted(false));
+    }
+  }, [showPaymentModal]);
+
+  const groupOverlayOpacity = useRef(new Animated.Value(0)).current;
+  const groupModalScale = useRef(new Animated.Value(0.96)).current;
+
+  useEffect(() => {
+    if (showGroupDetails) {
+      groupOverlayOpacity.setValue(0);
+      groupModalScale.setValue(0.96);
+      Animated.parallel([
+        Animated.timing(groupOverlayOpacity, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.spring(groupModalScale, { toValue: 1, friction: 8, useNativeDriver: true }),
+      ]).start();
+    } else if (groupOverlayOpacity._value > 0) {
+      Animated.parallel([
+        Animated.timing(groupOverlayOpacity, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(groupModalScale, { toValue: 0.96, duration: 160, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [showGroupDetails]);
+
+  const friendOverlayOpacity = useRef(new Animated.Value(0)).current;
+  const friendModalScale = useRef(new Animated.Value(0.96)).current;
+
+  useEffect(() => {
+    if (showFriendDetails) {
+      friendOverlayOpacity.setValue(0);
+      friendModalScale.setValue(0.96);
+      Animated.parallel([
+        Animated.timing(friendOverlayOpacity, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.spring(friendModalScale, { toValue: 1, friction: 8, useNativeDriver: true }),
+      ]).start();
+    } else if (friendOverlayOpacity._value > 0) {
+      Animated.parallel([
+        Animated.timing(friendOverlayOpacity, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(friendModalScale, { toValue: 0.96, duration: 160, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [showFriendDetails]);
 
   const [groups, setGroups] = useState([]);
   const [selectedGroupForDetails, setSelectedGroupForDetails] = useState(null);
@@ -68,19 +157,17 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
     const result = await apiService.addFriend(friendEmail); // goes to apiService.js, addFriend method
 
     if (result.success) {
-      // Check if the friends array exists and has changed
       if (result.user && Array.isArray(result.user.friends)) {
         setFriends(result.user.friends); // update UI
-        alert(`${friendEmail} has been added to your friends list!`);
+        Alert.alert("Success!", `${friendEmail} has been added to your friends list!`);
         setFriendEmail('');
         setShowAddFriend(false);
       } else {
         alert('Friend added, but could not fetch updated friends list.');
-        setFriendEmail(''); // Clear even if friends list couldn't be fetched
+        setFriendEmail('');
         setShowAddFriend(false);
       }
     } else {
-      // Show backend-provided error or fallback
       alert(result.message || result.error || 'Failed to add friend.');
     }
   } catch (err) {
@@ -136,8 +223,9 @@ const handleSettleFriendBalance = async () => {
   if (!selectedFriendForDetails || !friendBalance) return;
   
   try {
-    // Open payment method selector so user can choose how they want to pay
+    setShowFriendDetails(false);
     setPaymentTargetUser(selectedFriendForDetails);
+    await new Promise(res => setTimeout(res, 220));
     await loadPaymentOptions(selectedFriendForDetails.id);
     setShowPaymentModal(true);
   } catch (err) {
@@ -162,14 +250,14 @@ const handleSettleGroupBalance = async () => {
   if (!selectedGroupForDetails || !groupBalance) return;
   
   try {
-    // For groups, show same modal but target is the group owner or group itself.
-    // For now, pick the group's creator as the settlement target if available.
     const target = selectedGroupForDetails.createdBy || (selectedGroupForDetails.members && selectedGroupForDetails.members[0]);
     if (!target) {
       Alert.alert('Error', 'No valid payment recipient configured for this group');
       return;
     }
+    setShowGroupDetails(false);
     setPaymentTargetUser({ id: target });
+    await new Promise(res => setTimeout(res, 220));
     await loadPaymentOptions(target);
     setShowPaymentModal(true);
   } catch (err) {
@@ -178,7 +266,6 @@ const handleSettleGroupBalance = async () => {
   }
 };
 
-// load and intersect payment options between current user and target user
 const loadPaymentOptions = async (targetUserId) => {
   setIsLoadingPaymentOptions(true);
   try {
@@ -188,8 +275,6 @@ const loadPaymentOptions = async (targetUserId) => {
     const myMethods = (myMethodsResp && myMethodsResp.data && myMethodsResp.data.paymentMethods) ? myMethodsResp.data.paymentMethods : myMethodsResp.paymentMethods || myMethodsResp || [];
     const friendMethods = (friendMethodsResp && friendMethodsResp.data && friendMethodsResp.data.paymentMethods) ? friendMethodsResp.data.paymentMethods : friendMethodsResp.paymentMethods || friendMethodsResp || [];
 
-  // only show payment methods that the other user has configured (target)
-  // we will present friendMethods as options to pay to (since you pay to their handle)
     if (!friendMethods || friendMethods.length === 0) {
       Alert.alert('No payment methods', 'This user has not added any payment methods.');
       setPaymentOptions([]);
@@ -206,20 +291,32 @@ const loadPaymentOptions = async (targetUserId) => {
   }
 };
 
-  // deep link map for common payment apps
-const paymentDeepLink = (method, handle) => {
-  switch (method) {
-    case 'Venmo':
-      return `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handle)}`;
-    case 'CashApp':
-      // Cash App supports cashtag deep links via cashapp://$cashtag
-      return `cashapp://$${encodeURIComponent(handle)}`;
-    case 'PayPal':
-      return `paypal://send?recipient=${encodeURIComponent(handle)}`;
-    case 'Zelle':
-  // zelle deep links vary by bank; fallback to mailto for email or tel for phone
-      if (handle.includes('@')) return `mailto:${handle}`;
-      return `tel:${handle}`;
+const paymentDeepLink = (method, handle, amount) => {
+  const amt = amount ? encodeURIComponent(Number(amount).toFixed(2)) : null;
+  switch ((method || '').toLowerCase()) {
+    case 'venmo':
+    case 'venmo.com':
+      return {
+        deep: `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handle)}${amt ? `&amount=${amt}` : ''}`,
+        web: `https://venmo.com/${encodeURIComponent(handle)}${amt ? `?txn=pay&amount=${amt}` : ''}`
+      };
+    case 'cashapp':
+    case 'cash app':
+      return {
+        deep: `cashapp://$${encodeURIComponent(handle)}`,
+        web: `https://cash.app/$${encodeURIComponent(handle)}${amt ? `?amount=${amt}` : ''}`
+      };
+    case 'paypal':
+    case 'paypal.me':
+      return {
+        deep: `paypal://send?recipient=${encodeURIComponent(handle)}${amt ? `&amount=${amt}` : ''}`,
+        web: `https://www.paypal.me/${encodeURIComponent(handle)}${amt ? `/${amt}` : ''}`
+      };
+    case 'zelle':
+      return {
+        deep: `zelle://send?recipient=${encodeURIComponent(handle)}${amt ? `&amount=${amt}` : ''}`,
+        web: `https://www.zellepay.com/send?recipient=${encodeURIComponent(handle)}${amt ? `&amount=${amt}` : ''}`
+      };
     default:
       return null;
   }
@@ -227,33 +324,67 @@ const paymentDeepLink = (method, handle) => {
 
 const openPaymentApp = async (method) => {
   try {
-    const url = paymentDeepLink(method.type, method.handle);
-    if (url) {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-      // fallback: copy handle to clipboard and show instructions
-        Alert.alert('Open Payment App', `Could not open ${method.type} app. Please use handle: ${method.handle}`);
-      }
-  // mark transaction/participant as paid on backend (best-effort)
-      if (selectedFriendForDetails && friendBalance) {
-        try {
-          // find a transaction to mark as paid: in friend flows we don't have a single tx id; the app marks using settle endpoint on relevant tx ids.
-          // for simplicity we'll call the backend settle endpoint with paymentMethodId so it records the attempt against the last transaction if applicable.
-          // note: this is a best-effort placeholder; ideally we'd pass a specific transaction id and amount.
-          await apiService.markTransactionPaid(selectedFriendForDetails.id, null, true, method.id);
-        } catch (err) {
-          console.warn('Failed to mark backend paid:', err.message || err);
-        }
-      }
-    } else {
-      Alert.alert('Unsupported', `No deep link available for ${method.type}. Use handle: ${method.handle}`);
+    const friendId = selectedFriendForDetails && (selectedFriendForDetails.id || selectedFriendForDetails._id);
+    let amount = 0;
+    if (friendBalance && typeof friendBalance.balance === 'number') {
+      amount = Math.abs(friendBalance.balance || 0);
     }
+
+    const linkInfo = paymentDeepLink(method.type, method.handle, amount);
+    if (!linkInfo) {
+      Alert.alert('Unsupported', `No deep link available for ${method.type}. Use handle: ${method.handle}`);
+      setShowPaymentModal(false);
+      return;
+    }
+
+    const lower = (method.type || '').toLowerCase();
+    if (lower.includes('zelle')) {
+      let iOwe = true;
+      if (friendBalance && typeof friendBalance.totalOwed === 'number' && typeof friendBalance.totalPaid === 'number') {
+        iOwe = (friendBalance.totalOwed || 0) > (friendBalance.totalPaid || 0);
+      } else if (typeof friendBalance?.balance === 'number') {
+        iOwe = friendBalance.balance < 0;
+      } else if (typeof groupBalance?.balance === 'number') {
+        iOwe = groupBalance.balance < 0;
+      }
+      setZelleMethodForInstructions({ method, amount, iOwe });
+      setShowZelleInstructions(true);
+      return;
+    }
+
+    if (linkInfo.deep) {
+      try {
+        const can = await apiService.linkCanOpenURL(linkInfo.deep);
+        if (can) {
+          await apiService.linkOpenURL(linkInfo.deep);
+          setShowPaymentModal(false);
+          try { await apiService.markTransactionPaid(selectedFriendForDetails.id, null, true, method.id); } catch (e) { console.warn('markTransactionPaid failed', e); }
+          return;
+        }
+      } catch (e) {
+        console.warn('linkCanOpenURL deep error', e);
+      }
+    }
+
+    if (linkInfo.web) {
+      try {
+        const canWeb = await apiService.linkCanOpenURL(linkInfo.web);
+        if (canWeb) {
+          await apiService.linkOpenURL(linkInfo.web);
+          setShowPaymentModal(false);
+          try { await apiService.markTransactionPaid(selectedFriendForDetails.id, null, true, method.id); } catch (e) { console.warn('markTransactionPaid failed', e); }
+          return;
+        }
+      } catch (e) {
+        console.warn('linkCanOpenURL web error', e);
+      }
+    }
+
+    Alert.alert('Payment instructions', `Please pay ${method.handle} ${amount ? ` $${Number(amount).toFixed(2)}` : ''} using ${method.type}.`);
+    setShowPaymentModal(false);
   } catch (err) {
     console.error('Error opening payment app:', err);
     Alert.alert('Error', 'Failed to open payment app');
-  } finally {
     setShowPaymentModal(false);
   }
 };
@@ -267,7 +398,6 @@ const openPaymentApp = async (method) => {
         const result = await apiService.getFriends();
         if (result && result.success && Array.isArray(result.friends)) {
           setFriends(result.friends);
-          // fetch balances for all friends
           const balances = {};
           for (const friend of result.friends) {
             try {
@@ -297,7 +427,6 @@ const openPaymentApp = async (method) => {
       }
     };
 
-  // only fetch protected data when user is authenticated and an auth token exists
     if (isAuthenticated && apiService.token) {
       fetchFriends();
       fetchRequests();
@@ -314,7 +443,6 @@ const openPaymentApp = async (method) => {
       return;
     }
 
-      // prepare payload: backend accepts optional memberEmails
     const memberEmails = selectedFriends.length > 0
       ? friends
           .filter(f => selectedFriends.includes(f.id) || selectedFriends.includes(f._id))
@@ -341,12 +469,10 @@ const openPaymentApp = async (method) => {
   };
 
   const handleLeaveGroup = async (groupId, groupName) => {
-    // leave group
     try {
       const result = await apiService.leaveGroup(groupId);
       if (result && result.success) {
         setGroups(prev => prev.filter(group => group.id !== groupId));
-        // close modal if it's open
         if (selectedGroupForDetails && selectedGroupForDetails.id === groupId) {
           setShowGroupDetails(false);
           setSelectedGroupForDetails(null);
@@ -363,20 +489,16 @@ const openPaymentApp = async (method) => {
   };
 
   const handleDeleteGroup = async (groupId, groupName) => {
-    // Perform delete immediately without a confirmation alert
     try {
       await deleteGroupAPI(groupId);
       setGroups(prev => prev.filter(group => group.id !== groupId));
-      // Close modal if it's open
       if (selectedGroupForDetails && selectedGroupForDetails.id === groupId) {
         setShowGroupDetails(false);
         setSelectedGroupForDetails(null);
         setGroupBalance(null);
       }
-  // no user-facing alert per request
     } catch (error) {
       console.error('Error deleting group:', error);
-      // keep silent for now; could show a toast/snackbar later
     }
   };
 
@@ -442,12 +564,9 @@ const openPaymentApp = async (method) => {
     );
   };
 
-  // friend details modal handlers
-
   const handleAccept = async (requestId) => {
     try {
       await apiService.acceptFriendRequest(requestId);
-      // refresh requests and friends
       const r = await apiService.listFriendRequests();
       setRequests({ incoming: r.incoming || [], outgoing: r.outgoing || [] });
       const f = await apiService.getFriends();
@@ -472,7 +591,18 @@ const openPaymentApp = async (method) => {
   const renderGroupItem = ({ item }) => {
     if (!item) return null;
     
-    const balance = item.totalOwed || 0;
+    const currentUserId = currentUser?.id || currentUser?._id;
+    let balance = 0;
+    
+    if (userBalances?.groupBalances) {
+      const groupBalance = userBalances.groupBalances.find(gb => 
+        String(gb.groupId) === String(item.id || item._id)
+      );
+      balance = groupBalance ? groupBalance.balance : 0;
+    } else {
+      balance = item.totalOwed || 0;
+    }
+    
     const balanceColor = balance > 0 ? '#4CAF50' : balance < 0 ? '#f44336' : theme.colors.textSecondary;
     
     return (
@@ -488,7 +618,7 @@ const openPaymentApp = async (method) => {
         >
           <View style={styles.friendInfo}>
             <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
-              <Text style={styles.avatarText}>👥</Text>
+              <Text style={styles.avatarText}>G</Text>
             </View>
             <View style={styles.friendDetails}>
               <Text style={[styles.friendName, { color: theme.colors.text }]}>{item.name || 'Untitled Group'}</Text>
@@ -701,7 +831,6 @@ const openPaymentApp = async (method) => {
             if (activeTab === 'friends') {
               setShowAddFriend(true);
             } else {
-              // Allow creating a group even if the user has no friends yet.
               setShowCreateGroup(true);
             }
           }}
@@ -749,16 +878,37 @@ const openPaymentApp = async (method) => {
       {renderTabContent()}
 
       {/* friend details modal */}
-      {selectedFriendForDetails && (
+      {showFriendDetails && selectedFriendForDetails && (
         <Modal
           visible={showFriendDetails}
-          animationType="fade"
+          animationType="none"
           transparent={true}
           onRequestClose={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); }}
         >
-          <TouchableOpacity activeOpacity={1} style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); }}>
-            <SafeAreaView style={[styles.modalContainer, { justifyContent: 'center', alignItems: 'stretch' }]}> 
-              <TouchableOpacity activeOpacity={1} style={[styles.friendDetailsModal, { backgroundColor: theme.colors.card }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: friendOverlayOpacity }]} />
+          
+          <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <TouchableOpacity 
+              activeOpacity={1} 
+              style={StyleSheet.absoluteFill} 
+              onPress={() => { setShowFriendDetails(false); setSelectedFriendForDetails(null); }}
+            />
+            <Animated.View 
+              style={[
+                AppStyles.modalContainer, 
+                AppStyles.modalPanelShadow, 
+                { 
+                  width: '92%', 
+                  maxHeight: '85%', 
+                  borderRadius: 12, 
+                  padding: 16,
+                  transform: [{ scale: friendModalScale }], 
+                  backgroundColor: theme?.colors?.card || 'white', 
+                  borderColor: theme?.colors?.border || '#ccc', 
+                  borderWidth: 1 
+                }
+              ]}
+            >
                 <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{selectedFriendForDetails.name || 'Friend'}</Text>
                 <Text style={{ color: theme.colors.textSecondary, marginBottom: 12 }}>{selectedFriendForDetails.email}</Text>
                 
@@ -790,6 +940,20 @@ const openPaymentApp = async (method) => {
                         <Text style={{ color: 'white', fontWeight: '600' }}>Settle Balance</Text>
                       </TouchableOpacity>
                     )}
+                    {friendBalance.balance !== 0 && (
+                      <TouchableOpacity 
+                        style={[styles.settleButton, { marginTop: 10, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.primary }]} 
+                        onPress={() => { 
+                          Alert.alert(
+                            'Notification Sent', 
+                            `${selectedFriendForDetails.name} has been reminded about their $${Math.abs(friendBalance.balance).toFixed(2)} balance with you.`,
+                            [{ text: 'OK', style: 'default' }]
+                          ); 
+                        }}
+                      >
+                        <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>Send Reminder</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
                 
@@ -807,23 +971,43 @@ const openPaymentApp = async (method) => {
                     <Text style={styles.addButtonText}>Remove Friend</Text>
                   </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </Animated.View>
             </SafeAreaView>
-          </TouchableOpacity>
         </Modal>
       )}
 
       {/* group details modal */}
-      {selectedGroupForDetails && (
+      {showGroupDetails && selectedGroupForDetails && (
         <Modal
           visible={showGroupDetails}
-          animationType="fade"
+          animationType="none"
           transparent={true}
           onRequestClose={() => { setShowGroupDetails(false); setSelectedGroupForDetails(null); setGroupBalance(null); }}
         >
-          <TouchableOpacity activeOpacity={1} style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={() => { setShowGroupDetails(false); setSelectedGroupForDetails(null); setGroupBalance(null); }}>
-            <SafeAreaView style={[styles.modalContainer, { justifyContent: 'center', alignItems: 'stretch' }]}> 
-              <TouchableOpacity activeOpacity={1} style={[styles.friendDetailsModal, { backgroundColor: theme.colors.card }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: groupOverlayOpacity }]} />
+          
+          <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <TouchableOpacity 
+              activeOpacity={1} 
+              style={StyleSheet.absoluteFill} 
+              onPress={() => { setShowGroupDetails(false); setSelectedGroupForDetails(null); setGroupBalance(null); }}
+            />
+            <Animated.View 
+              style={[
+                AppStyles.modalContainer, 
+                AppStyles.modalPanelShadow, 
+                { 
+                  width: '92%', 
+                  maxHeight: '85%', 
+                  borderRadius: 12, 
+                  padding: 16,
+                  transform: [{ scale: groupModalScale }], 
+                  backgroundColor: theme?.colors?.card || 'white', 
+                  borderColor: theme?.colors?.border || '#ccc', 
+                  borderWidth: 1 
+                }
+              ]}
+            >
                 <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{selectedGroupForDetails.name || 'Group'}</Text>
                 {/* show a list of group members (avatars + names) instead of just a count */}
                 <View style={{ marginBottom: 12 }}>
@@ -844,38 +1028,73 @@ const openPaymentApp = async (method) => {
                 </View>
                 
                 {/* balance Information */}
-                {groupBalance && (
-                  <View style={{ marginBottom: 20, padding: 15, backgroundColor: theme.colors.background, borderRadius: 8, width: '100%' }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8 }}>Your Group Balance</Text>
-                    <Text style={{ 
-                      fontSize: 24, 
-                      fontWeight: 'bold', 
-                      color: groupBalance.balance >= 0 ? '#4CAF50' : '#f44336',
-                      marginBottom: 8
-                    }}>
-                      ${Math.abs(groupBalance.balance || 0).toFixed(2)}
-                    </Text>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                      <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
-                        Total owed: ${selectedGroupForDetails.totalOwed?.toFixed(2) || '0.00'}
+                {(() => {
+                  const currentUserId = currentUser?.id || currentUser?._id;
+                  let balance = 0;
+                  let hasContextBalance = false;
+                  
+                  if (userBalances?.groupBalances) {
+                    const groupBalance = userBalances.groupBalances.find(gb => 
+                      String(gb.groupId) === String(selectedGroupForDetails.id || selectedGroupForDetails._id)
+                    );
+                    if (groupBalance) {
+                      balance = groupBalance.balance;
+                      hasContextBalance = true;
+                    }
+                  }
+                  
+                  if (!hasContextBalance && groupBalance) {
+                    balance = groupBalance.balance || 0;
+                  }
+                  
+                  return (hasContextBalance || groupBalance) ? (
+                    <View style={{ marginBottom: 20, padding: 15, backgroundColor: theme.colors.background, borderRadius: 8, width: '100%' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8 }}>Your Group Balance</Text>
+                      <Text style={{ 
+                        fontSize: 24, 
+                        fontWeight: 'bold', 
+                        color: balance >= 0 ? '#4CAF50' : '#f44336',
+                        marginBottom: 8
+                      }}>
+                        ${Math.abs(balance).toFixed(2)}
                       </Text>
-                    </View>
-                    {(groupBalance.balance || 0) !== 0 && (
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 12, marginBottom: 8 }}>
+                        {balance > 0 ? 'You are owed' : balance < 0 ? 'You owe' : 'You are settled up'}
+                      </Text>
+                      {balance !== 0 && (
+                        <TouchableOpacity 
+                          style={[styles.settleButton, { backgroundColor: theme.colors.primary, marginTop: 12 }]}
+                          onPress={handleSettleGroupBalance}
+                        >
+                          <Text style={{ color: 'white', fontWeight: '600' }}>Settle Balance</Text>
+                        </TouchableOpacity>
+                      )}
+                    {balance !== 0 && (
                       <TouchableOpacity 
-                        style={[styles.settleButton, { backgroundColor: theme.colors.primary, marginTop: 12 }]}
-                        onPress={handleSettleGroupBalance}
+                        style={[styles.settleButton, { marginTop: 10, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.primary }]} 
+                        onPress={() => { 
+                          const currentUserId = currentUser?.id || currentUser?._id;
+                          let balance = 0;
+                          if (userBalances?.groupBalances) {
+                            const groupBalance = userBalances.groupBalances.find(gb => 
+                              String(gb.groupId) === String(selectedGroupForDetails.id || selectedGroupForDetails._id)
+                            );
+                            balance = groupBalance ? groupBalance.balance : 0;
+                          }
+                          Alert.alert(
+                            'Group Reminder Sent', 
+                            `All ${selectedGroupForDetails.name} members have been notified about outstanding balances. Your balance: $${Math.abs(balance).toFixed(2)}`,
+                            [{ text: 'OK', style: 'default' }]
+                          ); 
+                        }}
                       >
-                        <Text style={{ color: 'white', fontWeight: '600' }}>Settle Balance</Text>
+                        <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>Notify Group</Text>
                       </TouchableOpacity>
                     )}
-                  </View>
-                )}
-                
-                {!groupBalance && (
-                  <View style={{ marginBottom: 20, padding: 15, backgroundColor: theme.colors.background, borderRadius: 8 }}>
-                    <Text style={{ color: theme.colors.textSecondary, textAlign: 'center' }}>Loading balance...</Text>
-                  </View>
-                )}
+                    </View>
+                  ) : null;
+                })()}
+
 
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
                   <TouchableOpacity style={[styles.cancelButton, { borderColor: theme.colors.textSecondary, marginRight: 8 }]} onPress={() => { setShowGroupDetails(false); setSelectedGroupForDetails(null); setGroupBalance(null); }}>
@@ -885,44 +1104,87 @@ const openPaymentApp = async (method) => {
                     <Text style={styles.addButtonText}>Leave Group</Text>
                   </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </Animated.View>
             </SafeAreaView>
-          </TouchableOpacity>
         </Modal>
       )}
 
       {/* payment method selection modal */}
-      <Modal
-        visible={showPaymentModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowPaymentModal(false)}
-      >
-        <TouchableOpacity activeOpacity={1} style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={() => setShowPaymentModal(false)}>
-          <SafeAreaView style={[styles.modalContainer, { justifyContent: 'center', alignItems: 'stretch' }]}> 
-            <TouchableOpacity activeOpacity={1} style={[styles.friendDetailsModal, { backgroundColor: theme.colors.card }]}> 
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Choose payment method</Text>
-              {isLoadingPaymentOptions ? (
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-              ) : paymentOptions.length === 0 ? (
-                <Text style={{ color: theme.colors.textSecondary, marginTop: 12 }}>No payment methods available for this user.</Text>
-              ) : (
-                paymentOptions.map(pm => (
-                  <TouchableOpacity key={pm.id || pm._id} style={[styles.settleButton, { backgroundColor: theme.colors.background, marginTop: 8 }]} onPress={() => openPaymentApp(pm)}>
-                    <Text style={{ color: theme.colors.text }}>{pm.type} — {pm.handle}</Text>
-                  </TouchableOpacity>
-                ))
-              )}
+      {isPaymentMounted && (
+        <Modal visible={isPaymentMounted} animationType="none" transparent={true} onRequestClose={() => setShowPaymentModal(false)}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: overlayOpacity }]} />
 
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
-                <TouchableOpacity style={[styles.cancelButton, { borderColor: theme.colors.textSecondary, marginRight: 8 }]} onPress={() => setShowPaymentModal(false)}>
-                  <Text style={{ color: theme.colors.textSecondary }}>Cancel</Text>
+          <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Animated.View style={[AppStyles.modalContainer, AppStyles.modalPanelShadow, { width: '92%', maxHeight: '85%', borderRadius: 12, padding: 0, transform: [{ scale: modalScale }], backgroundColor: theme?.colors?.card || 'white', borderColor: theme?.colors?.border || '#ccc', borderWidth: 1 }]}> 
+              <View style={[AppStyles.modalHeader, { borderBottomWidth: 1, borderColor: theme?.colors?.borderLight || '#e2e8f0', paddingVertical: 12, paddingHorizontal: 16 }]}>
+                <Text style={[AppStyles.modalTitle, { color: theme?.colors?.text || '#000' }]}>Choose payment method</Text>
+                <TouchableOpacity onPress={() => { setShowPaymentModal(false); }} style={[AppStyles.modalCloseButton, { backgroundColor: theme?.colors?.primaryDark || '#6d28d9' }]}>
+                  <Text style={[AppStyles.modalCloseButtonText]}>Close</Text>
                 </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+
+              <View style={{ padding: 16, borderTopWidth: 1, borderColor: theme?.colors?.border || '#e5e7eb' }}>
+                {isLoadingPaymentOptions && (
+                  <View style={{ padding: 12, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color={theme?.colors?.primary || '#6d28d9'} />
+                  </View>
+                )}
+
+                {!isLoadingPaymentOptions && paymentOptions.length === 0 && (
+                  <Text style={{ color: theme?.colors?.textSecondary || '#666', textAlign: 'center' }}>No payment methods available for this user.</Text>
+                )}
+
+                {!isLoadingPaymentOptions && paymentOptions.length > 0 && (
+                  paymentOptions.map((pm) => (
+                    <TouchableOpacity
+                      key={pm.id || pm._id}
+                      style={{ paddingVertical: 12, paddingHorizontal: 16, borderRadius: 10, backgroundColor: theme?.colors?.surface, marginBottom: 10 }}
+                      onPress={() => openPaymentApp(pm)}
+                    >
+                      <Text style={{ color: theme?.colors?.text, fontWeight: '600' }}>{`${pm.type} • ${pm.handle}`}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+
+                {/* Zelle instructions */}
+                {showZelleInstructions && zelleMethodForInstructions && (
+                  <View style={{ marginTop: 8, padding: 12, backgroundColor: theme?.colors?.background, borderRadius: 8 }}>
+                    <Text style={{ fontWeight: '700', marginBottom: 8, color: theme?.colors?.text }}>Zelle instructions</Text>
+                    {/* determine direction: if friendBalance or groupBalance exists, use sign to decide who owes */}
+                    {(() => {
+                      const amtText = zelleMethodForInstructions.amount ? `$${Number(zelleMethodForInstructions.amount).toFixed(2)}` : '';
+                      const iOwe = !!zelleMethodForInstructions.iOwe;
+                      if (iOwe) {
+                        return <Text style={{ color: theme?.colors?.textSecondary, marginBottom: 8 }}>Send {amtText} via Zelle to the recipient below using your bank's app.</Text>;
+                      }
+                      return <Text style={{ color: theme?.colors?.textSecondary, marginBottom: 8 }}>Request {amtText} via Zelle from the recipient below using your bank's app.</Text>;
+                    })()}
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={{ color: theme?.colors?.text, fontWeight: '600' }}>{zelleMethodForInstructions.method.type}</Text>
+                      <Text style={{ color: theme?.colors?.textSecondary }}>{zelleMethodForInstructions.amount ? `$${Number(zelleMethodForInstructions.amount).toFixed(2)}` : ''}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme?.colors?.text }}>{zelleMethodForInstructions.method.handle}</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme?.colors?.primary, borderRadius: 8 }} onPress={async () => { const ok = await copyToClipboard(zelleMethodForInstructions.method.handle || ''); if (ok) Alert.alert('Copied', 'Zelle handle copied to clipboard'); else Alert.alert('Copy failed', 'Could not copy to clipboard'); }}>
+                          <Text style={{ color: 'white', fontWeight: '700' }}>Copy handle</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme?.colors?.primary, borderRadius: 8 }} onPress={async () => { if (zelleMethodForInstructions.amount) { const ok = await copyToClipboard(String(Number(zelleMethodForInstructions.amount).toFixed(2))); if (ok) Alert.alert('Copied', 'Amount copied to clipboard'); else Alert.alert('Copy failed', 'Could not copy to clipboard'); } else { Alert.alert('No amount', 'No amount available to copy'); } }}>
+                          <Text style={{ color: 'white', fontWeight: '700' }}>Copy amount</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    <TouchableOpacity style={{ marginTop: 10, alignSelf: 'flex-end' }} onPress={() => { setShowZelleInstructions(false); setZelleMethodForInstructions(null); setShowPaymentModal(false); }}>
+                      <Text style={{ color: theme?.colors?.textSecondary }}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
           </SafeAreaView>
-        </TouchableOpacity>
-      </Modal>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -970,8 +1232,7 @@ const styles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowRadius: 3,
   },
   tab: {
     flex: 1,
@@ -1000,8 +1261,7 @@ const styles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowRadius: 3,
   },
   addTitle: {
     fontSize: 18,
@@ -1067,26 +1327,26 @@ const styles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 2,
   },
   cardWrapper: {
     marginBottom: 12,
     overflow: 'visible',
     zIndex: 5,
+    paddingHorizontal: 3,
+    paddingTop: 2,
   },
   cardShadow: {
     position: 'absolute',
-    left: 8,
-    right: 8,
-    top: 6,
-    bottom: -6,
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     borderRadius: 14,
     backgroundColor: 'transparent',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowRadius: 4,
   },
   friendInfo: {
     flexDirection: 'row',
@@ -1164,8 +1424,7 @@ const styles = StyleSheet.create({
       height: 0,
     },
     shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 4,
   },
   groupHeader: {
     flexDirection: 'row',
@@ -1264,28 +1523,6 @@ const styles = StyleSheet.create({
   },
   groupContent: {
     flex: 1,
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    shadowColor: '#673e9dff',
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.5,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  deleteButtonText: {
-    fontSize: 14,
-    color: 'white',
   },
   modalOverlay: {
     flex: 1,

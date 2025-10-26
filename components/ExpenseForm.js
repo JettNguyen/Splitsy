@@ -53,6 +53,10 @@ const ExpenseForm = ({visible,
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showReceiptScanner, setShowReceiptScanner] = useState(false);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [newItem, setNewItem] = useState({ name: '', price: '', qty: '' });
+  const [amountFocused, setAmountFocused] = useState(false);
+  const [addItemPriceFocused, setAddItemPriceFocused] = useState(false);
 
   // "unit" assignments for split by item (expand qty → units)
   const [unitAssignments, setUnitAssignments] = useState([]); // [{ unitid, memberid }]
@@ -103,6 +107,12 @@ useEffect(() => {
   fetchGroups();
 }, []);
 
+// ensure default payer is current user unless overridden
+useEffect(() => {
+  if (!currentUser) return;
+  setFormData(prev => ({ ...prev, payer: prev.payer || (currentUser.id || currentUser._id) }));
+}, [currentUser]);
+
   const selectedGroup = groups.find(g => g.id === formData.groupId);
   const allMembers = selectedGroup ? selectedGroup.members : [];
 
@@ -111,12 +121,29 @@ useEffect(() => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // currency helpers
+  const unformatCurrency = (s) => {
+    if (s === null || s === undefined) return '';
+    return ('' + s).toString().replace(/[^0-9.-]/g, '');
+  };
+
+  const formatCurrency = (v) => {
+    if (v === null || v === undefined || v === '') return '';
+    const n = typeof v === 'number' ? v : parseFloat(unformatCurrency(v));
+    if (!Number.isFinite(n)) return '';
+    return `$${n.toFixed(2)}`;
+  };
+
   // -------------------------
   // validation + submit
   // -------------------------
   const validateForm = () => {
     if (!formData.description.trim()) return 'Please enter a description';
-    if (!formData.amount || isNaN(parseFloat(formData.amount)) || parseFloat(formData.amount) <= 0) {
+    // accept either an entered amount or items with subtotal
+    const amountVal = nMoney(formData.amount);
+    const hasItems = Array.isArray(formData.items) && formData.items.length > 0;
+    const subtotalVal = nMoney(formData.subtotal || 0);
+    if ((!amountVal || amountVal <= 0) && !(hasItems && subtotalVal > 0)) {
       return 'Please enter a valid amount';
     }
     if (formData.participants.length === 0) return 'Please select at least one participant';
@@ -131,9 +158,17 @@ useEffect(() => {
     }
     setLoading(true);
     try {
+      // determine final amount: prefer explicit amount, otherwise use subtotal + service_charge
+      let amountNumeric = nMoney(formData.amount);
+      if (!amountNumeric || amountNumeric <= 0) {
+        const subtotalVal = nMoney(formData.subtotal || 0);
+        const serviceVal = nMoney(formData.service_charge || 0);
+        amountNumeric = Math.max(0, subtotalVal + serviceVal);
+      }
+
       await onSubmit({
         ...formData,
-        amount: parseFloat(formData.amount),
+        amount: amountNumeric,
         paidBy: currentUser.id,
         date: new Date().toISOString()
       });
@@ -209,11 +244,16 @@ const handleFriendSelect = (friendId) => {
       const totalStr = receiptData.total?.toString() || '';
       const itemsIn = Array.isArray(receiptData.items) ? receiptData.items : [];
 
-      const normItems = itemsIn.map(it => ({
-        name: (it.name || it.description || '').toString(),
-        price: parseFloat(it.price ?? it.amount ?? 0) || 0, // line total
-        qty: parseInt(it.qty ?? 1, 10) || 1,
-      }));
+      const normItems = itemsIn.map(it => {
+        const qty = parseInt(it.qty ?? 1, 10) || 1;
+        const line = parseFloat(it.price ?? it.amount ?? 0) || 0;
+        return {
+          name: (it.name || it.description || '').toString(),
+          qty,
+          unitPrice: qty > 0 ? (line / qty) : line,
+          price: line
+        };
+      });
 
       const subtotal = normItems.reduce((s, it) => s + it.price, 0);
       const total = parseFloat(totalStr) || 0;
@@ -262,10 +302,76 @@ const handleFriendSelect = (friendId) => {
     setShowReceiptScanner(false);
   };
 
+  const handleAddItem = () => {
+    // validate
+    if (!newItem.name.trim() || !newItem.price || isNaN(parseFloat(unformatCurrency(newItem.price)))) {
+      Alert.alert('Error', 'Please enter valid item name and price');
+      return;
+    }
+  const qty = Math.max(1, parseInt(newItem.qty || '1', 10) || 1);
+  const unitPrice = parseFloat(unformatCurrency(newItem.price));
+    const item = {
+      name: newItem.name.trim(),
+      qty,
+      unitPrice,
+      price: unitPrice * qty // line total
+    };
+
+    // build new items array and update form data
+    const items = [...(formData.items || []), item];
+    const subtotal = items.reduce((s, it) => s + (parseFloat(it.price) || 0), 0);
+    const amount = formData.amount && !isNaN(parseFloat(formData.amount)) ? formData.amount : subtotal + (formData.service_charge || 0);
+
+  setFormData(prev => ({ ...prev, items, subtotal, amount }));
+
+    // rebuild unit assignments from items (unitPrice per unit is item.unitPrice)
+    const flatUnits = [];
+    items.forEach((it, idx) => {
+      for (let u = 0; u < (it.qty || 1); u++) {
+        flatUnits.push({ unitId: `${idx}-${u}`, name: it.name, unitPrice: it.unitPrice });
+      }
+    });
+    setUnitAssignments(flatUnits.map(u => ({ unitId: u.unitId, memberId: null })));
+
+    // reset modal
+    setNewItem({ name: '', price: '', qty: '' });
+    setShowAddItemModal(false);
+  };
+
+  const handleRemoveItem = (removeIdx) => {
+    const prevItems = formData.items || [];
+    const prevSubtotal = prevItems.reduce((s, it) => s + (parseFloat(it.price) || 0), 0);
+    const newItems = prevItems.filter((_, idx) => idx !== removeIdx);
+    const newSubtotal = newItems.reduce((s, it) => s + (parseFloat(it.price) || 0), 0);
+    // if amount was tracking subtotal + service_charge, update it; otherwise keep user's amount
+    const prevAmount = parseFloat(formData.amount) || 0;
+    const prevService = parseFloat(formData.service_charge) || 0;
+    let newAmount = formData.amount;
+    if (Math.abs(prevAmount - (prevSubtotal + prevService)) < 0.01) {
+      newAmount = (newSubtotal + prevService).toFixed(2);
+    }
+
+    setFormData(prev => ({ ...prev, items: newItems, subtotal: newSubtotal, amount: newAmount }));
+
+    // rebuild unit assignments
+    const flatUnits = [];
+    newItems.forEach((it, idx) => {
+      for (let u = 0; u < (it.qty || 1); u++) {
+        flatUnits.push({ unitId: `${idx}-${u}`, name: it.name, unitPrice: it.unitPrice });
+      }
+    });
+    setUnitAssignments(flatUnits.map(u => ({ unitId: u.unitId, memberId: null })));
+  };
+
   // -------------------------
   // split logic (equal / by item)
   // -------------------------
-  const nMoney = (v) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : 0);
+  const nMoney = (v) => {
+    if (v === null || v === undefined) return 0;
+    const s = ('' + v).toString().replace(/[^0-9.-]/g, '');
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : 0;
+  };
   const nInt = (v, d = 1) => (Number.isFinite(parseInt(v, 10)) ? parseInt(v, 10) : d);
 
 const memberList = useMemo(() => {
@@ -285,6 +391,17 @@ const memberList = useMemo(() => {
     return { id: userId, name: 'Unknown' };
   });
 }, [formData.participants, friends, groups]);
+
+// payer candidates: current user (You) plus selected members (deduped)
+const payerCandidates = useMemo(() => {
+  const meId = currentUser && (currentUser.id || currentUser._id);
+  const list = [];
+  if (meId) list.push({ id: meId, name: 'You' });
+  (memberList || []).forEach(m => {
+    if (String(m.id) !== String(meId)) list.push(m);
+  });
+  return list;
+}, [memberList, currentUser]);
 
 
   const flatUnits = useMemo(() => {
@@ -508,13 +625,44 @@ const FriendItem = ({ friend }) => {
                   borderColor: theme.colors.border,
                   color: theme.colors.text
                 }]}
-                placeholder="0.00"
+                placeholder={amountFocused ? '0.00' : '$0.00'}
                 placeholderTextColor={theme.colors.textSecondary}
-                value={formData.amount}
+                value={amountFocused ? formData.amount : formatCurrency(formData.amount)}
+                onFocus={() => { setAmountFocused(true); updateFormData('amount', unformatCurrency(formData.amount)); }}
+                onBlur={() => { setAmountFocused(false); updateFormData('amount', formatCurrency(unformatCurrency(formData.amount))); }}
                 onChangeText={(text) => updateFormData('amount', text)}
                 keyboardType="decimal-pad"
               />
             </View>
+
+            <View style={[styles.sectionContainer, { backgroundColor: theme.colors.card, marginBottom: 16 }]}>
+              <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>Items</Text>
+              {(formData.items || []).length === 0 ? (
+                <Text style={{ color: theme.colors.textSecondary, textAlign: 'center' }}>No items added</Text>
+              ) : (
+                (formData.items || []).map((it, idx) => (
+                  <View key={`${it.name}-${idx}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: theme.colors.text }}>{it.name} x{it.qty} at ${Number(it.unitPrice || (it.price / (it.qty || 1))).toFixed(2)} ea</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Text style={{ color: theme.colors.text }}>{`$${(it.price).toFixed(2)}`}</Text>
+                      <TouchableOpacity onPress={() => handleRemoveItem(idx)} style={{ padding: 6 }}>
+                        <Text style={{ color: theme.colors.error, fontWeight: '700' }}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+
+              <View style={{ marginTop: 12 }}>
+                <TouchableOpacity onPress={() => setShowAddItemModal(true)} style={{ padding: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, alignItems: 'center' }}>
+                  <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>+ Add item</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* payer selector moved to Step 3 (Split Details) so user selects members first */}
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
@@ -569,13 +717,13 @@ const FriendItem = ({ friend }) => {
                 Summary
               </Text>
               <Text style={[styles.summaryAmount, { color: theme.colors.primary }]}>
-                ${formData.amount || '0.00'}
+                {formatCurrency(nMoney(formData.amount)) || '$0.00'}
               </Text>
               <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
-                Subtotal: ${subtotalNum.toFixed(2)}
+                Subtotal: {formatCurrency(subtotalNum) || '$0.00'}
               </Text>
               <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
-                Service Charge (including tax): ${serviceChargeAmount.toFixed(2)}
+                Service Charge (including tax): {formatCurrency(serviceChargeAmount) || '$0.00'}
               </Text>
               <Text style={[styles.summaryDescription, { color: theme.colors.textSecondary }]}>
                 {formData.description}
@@ -621,14 +769,22 @@ const FriendItem = ({ friend }) => {
               // split evenly
               // -------------------------
               <View style={{ marginTop: 16 }}>
-                {memberList.map(m => (
-                  <View key={m.id} style={styles.oweRow}>
-                    <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}</Text>
-                    <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
-                      ${(totalNum / Math.max(1, memberList.length)).toFixed(2)}
-                    </Text>
-                  </View>
-                ))}
+                {(() => {
+                  const perShare = totalNum / Math.max(1, memberList.length);
+                  const payerId = formData.payer;
+                  return memberList.map(m => {
+                    const isPayer = payerId && String(payerId) === String(m.id);
+                    const displayAmount = isPayer ? 0 : perShare;
+                    return (
+                      <View key={m.id} style={styles.oweRow}>
+                        <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}</Text>
+                        <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
+                          ${displayAmount.toFixed(2)}
+                        </Text>
+                      </View>
+                    );
+                  });
+                })()}
               </View>
             ) : (
               // -------------------------
@@ -681,17 +837,45 @@ const FriendItem = ({ friend }) => {
                   <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
                     Base fee per person (fees + tax): ${baseFeePerPerson.toFixed(2)}
                   </Text>
-                  {memberList.map(m => (
-                    <View key={m.id} style={styles.oweRow}>
-                      <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}: </Text>
-                      <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
-                        ${Math.max(0, owedByPerson.get(m.id)).toFixed(2)}
-                      </Text>
-                    </View>
-                  ))}
+                  {memberList.map(m => {
+                    const payerId = formData.payer;
+                    const isPayer = payerId && String(payerId) === String(m.id);
+                    const amt = Math.max(0, owedByPerson.get(m.id) || 0);
+                    const displayAmt = isPayer ? 0 : amt;
+                    return (
+                      <View key={m.id} style={styles.oweRow}>
+                        <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}: </Text>
+                        <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
+                          ${displayAmt.toFixed(2)}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
             )}
+
+              {/* Payer selector - placed here in Step 3 after members are selected */}
+              <View style={{ marginTop: 18 }}>
+                <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Who paid the total?</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                  {payerCandidates.map(pc => {
+                    const selected = String(formData.payer) === String(pc.id);
+                    return (
+                      <TouchableOpacity
+                        key={pc.id}
+                        onPress={() => updateFormData('payer', pc.id)}
+                        style={[
+                          styles.payerChip,
+                          { borderColor: selected ? theme.colors.primary : theme.colors.border, backgroundColor: selected ? theme.colors.primary : theme.colors.surface }
+                        ]}
+                      >
+                        <Text style={{ color: selected ? 'white' : theme.colors.text, fontWeight: '700' }}>{pc.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
           </View>
         );
     }
@@ -719,7 +903,7 @@ const FriendItem = ({ friend }) => {
 
         <StepIndicator />
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: currentStep === 3 ? 260 : 48 }}>
           {renderStep()}
         </ScrollView>
 
@@ -772,6 +956,25 @@ const FriendItem = ({ friend }) => {
             setAssignModal({ open: false, unitId: null });
           }}
         />
+        <Modal visible={showAddItemModal} transparent animationType="fade" onRequestClose={() => setShowAddItemModal(false)}>
+          <TouchableWithoutFeedback onPress={() => setShowAddItemModal(false)}>
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+          </TouchableWithoutFeedback>
+          <View style={{ position: 'absolute', left: 20, right: 20, top: '30%', borderRadius: 12, padding: 16, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: theme.colors.text, marginBottom: 12 }}>Add item</Text>
+            <TextInput placeholder="Name" placeholderTextColor={theme.colors.textSecondary} value={newItem.name} onChangeText={(t) => setNewItem(prev => ({ ...prev, name: t }))} style={[styles.input, { marginBottom: 10, backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]} />
+            <TextInput placeholder={addItemPriceFocused ? '0.00' : 'Unit price'} placeholderTextColor={theme.colors.textSecondary} value={addItemPriceFocused ? newItem.price : formatCurrency(newItem.price)} onFocus={() => { setAddItemPriceFocused(true); setNewItem(prev => ({ ...prev, price: unformatCurrency(prev.price) })); }} onBlur={() => { setAddItemPriceFocused(false); setNewItem(prev => ({ ...prev, price: formatCurrency(unformatCurrency(prev.price)) })); }} onChangeText={(t) => setNewItem(prev => ({ ...prev, price: t }))} keyboardType="decimal-pad" style={[styles.input, { marginBottom: 10, backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]} />
+            <TextInput placeholder="Qty" placeholderTextColor={theme.colors.textSecondary} value={newItem.qty} onChangeText={(t) => setNewItem(prev => ({ ...prev, qty: t }))} keyboardType="number-pad" style={[styles.input, { marginBottom: 10, backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]} />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity onPress={() => setShowAddItemModal(false)} style={[styles.footerButton, { flex: 1, backgroundColor: theme.colors.surface }]}>
+                <Text style={{ color: theme.colors.text }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleAddItem} style={[styles.footerButton, { flex: 1, backgroundColor: theme.colors.primary }]}>
+                <Text style={{ color: 'white' }}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </Modal>
   );
@@ -914,9 +1117,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 0, 0, 0.05)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
   },
   summaryTitle: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
   summaryAmount: { fontSize: 32, fontWeight: '800', marginBottom: 8 },
@@ -988,6 +1190,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.06)',
   },
+  payerChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 2,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   sectionContainer: {
   borderRadius: 16,
   padding: 12,
@@ -996,9 +1207,8 @@ const styles = StyleSheet.create({
   borderColor: 'rgba(0,0,0,0.05)',
   shadowColor: '#000',
   shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.05,
-  shadowRadius: 8,
-  elevation: 3,
+  shadowOpacity: 0.5,
+  shadowRadius: 5,
 },
 sectionHeader: {
   fontSize: 16,

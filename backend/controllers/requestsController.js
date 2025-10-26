@@ -30,7 +30,7 @@ exports.sendFriendRequest = async (req, res) => {
     const request = await FriendRequest.create({ from: fromId, to: toId, message });
     res.status(201).json(request);
   } catch (err) {
-    console.error(err);
+    console.error('Create friend request error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -42,7 +42,7 @@ exports.listFriendRequests = async (req, res) => {
     const requests = await FriendRequest.find({ to: userId, status: 'pending' }).populate('from', 'name email');
     res.json(requests);
   } catch (err) {
-    console.error(err);
+    console.error('List friend requests error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -60,7 +60,7 @@ exports.acceptFriendRequest = async (req, res) => {
 
     res.json({ message: 'Friend request accepted', request });
   } catch (err) {
-    console.error(err);
+    console.error('Accept friend request error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -78,7 +78,7 @@ exports.declineFriendRequest = async (req, res) => {
 
     res.json({ message: 'Friend request declined' });
   } catch (err) {
-    console.error(err);
+    console.error('Decline friend request error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };

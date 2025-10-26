@@ -53,7 +53,7 @@ async function createTransaction(req, res) {
     });
 
   const saved = await tx.save();
-  console.log('Transaction saved:', saved);
+
 
     const populated = await Transaction.findById(saved._id)
       .populate('payer', 'name email')

@@ -77,13 +77,13 @@ exports.removeFriend = async (req, res) => {
   }
 };
 
-// debug helper: return the authenticated user's id and populated friends
+
 
 
 // get a friend's public payment methods by user id
 exports.getFriendPaymentMethods = async (req, res) => {
   try {
-  // minimal debug output; avoid printing tokens or full headers in production
+
     if ((process.env.NODE_ENV || 'development') === 'development') {
       const authHeader = req.headers.authorization || '';
       const tokenPreview = authHeader.startsWith('Bearer ') ? `${authHeader.slice(0, 20)}...` : authHeader;

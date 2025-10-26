@@ -365,7 +365,7 @@ function HomeContent({ theme, userGroups, userTransactions, balance, onAddExpens
             theme={theme}
           />
         ) : (
-          recentActivity.slice(0, 5).map((transaction) => (
+          recentActivity.slice(0, 4).map((transaction) => (
             <TransactionItem 
               key={transaction._id || transaction.id} 
               transaction={transaction} 

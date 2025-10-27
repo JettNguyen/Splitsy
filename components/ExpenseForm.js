@@ -44,7 +44,7 @@ const ExpenseForm = ({visible,
     category: 'other',
     splitType: 'equal',
     participants: [],
-    items: [],            // data from receipt
+    items: [],            //data from receipt
     subtotal: 0,
     service_charge: 0,
     ...initialData
@@ -59,7 +59,7 @@ const ExpenseForm = ({visible,
   const [addItemPriceFocused, setAddItemPriceFocused] = useState(false);
 
   // "unit" assignments for split by item (expand qty → units)
-  const [unitAssignments, setUnitAssignments] = useState([]); // [{ unitid, memberid }]
+  const [unitAssignments, setUnitAssignments] = useState([]); 
   const [openUnit, setOpenUnit] = useState(null); // which unitid's dropdown is open (kept but unused now)
 
   const [assignModal, setAssignModal] = useState({ open: false, unitId: null });
@@ -134,9 +134,7 @@ useEffect(() => {
     return `$${n.toFixed(2)}`;
   };
 
-  // -------------------------
-  // validation + submit
-  // -------------------------
+  // validation and submit
   const validateForm = () => {
     if (!formData.description.trim()) return 'Please enter a description';
     // accept either an entered amount or items with subtotal
@@ -195,9 +193,7 @@ useEffect(() => {
     }
   };
 
-  // -------------------------
-  // group + participants
-  // -------------------------
+  //handle group and participants
 const handleGroupSelect = (groupId) => {
   const current = formData.groupId;
   if (current === groupId) {
@@ -235,9 +231,7 @@ const handleFriendSelect = (friendId) => {
   });
 };
 
-  // -------------------------
-  // receipt scanner → populate fields
-  // -------------------------
+  // scan receipt and populate fields
   const handleReceiptScanned = (receiptData) => {
     if (receiptData) {
       const merchant = receiptData.merchant || receiptData.description || '';
@@ -363,9 +357,7 @@ const handleFriendSelect = (friendId) => {
     setUnitAssignments(flatUnits.map(u => ({ unitId: u.unitId, memberId: null })));
   };
 
-  // -------------------------
-  // split logic (equal / by item)
-  // -------------------------
+  // split logic (equal or by item)
   const nMoney = (v) => {
     if (v === null || v === undefined) return 0;
     const s = ('' + v).toString().replace(/[^0-9.-]/g, '');
@@ -421,7 +413,7 @@ const payerCandidates = useMemo(() => {
   const subtotalNum = formData.subtotal || formData.items.reduce((s, it) => s + nMoney(it.price), 0);
   const groupSize = Math.max(1, memberList.length);
 
-  // total - subtotal (includes tax & all fees)
+  // total - subtotal (includes tax and all fees)
   const serviceChargeAmount = Math.max(0, totalNum - subtotalNum);
   const baseFeePerPerson = serviceChargeAmount / groupSize;
 
@@ -443,9 +435,7 @@ const payerCandidates = useMemo(() => {
     return m?.name || 'Assign to';
   };
 
-  // -------------------------
   // render helpers
-  // -------------------------
   const CategoryItem = ({ category }) => {
     const isSelected = formData.category === category.id;
     return (
@@ -774,19 +764,28 @@ const FriendItem = ({ friend }) => {
                   const payerId = formData.payer;
                   return memberList.map(m => {
                     const isPayer = payerId && String(payerId) === String(m.id);
-                    const displayAmount = isPayer ? 0 : perShare;
+                    //const displayAmount = isPayer ? 0 : perShare;
                     return (
                       <View key={m.id} style={styles.oweRow}>
                         <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+
                         <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
-                          ${displayAmount.toFixed(2)}
+                          ${perShare.toFixed(2)}
                         </Text>
+                        {isPayer && (
+                <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
+                  (paid)
+                </Text>
+              )}
+              </View>
                       </View>
                     );
                   });
                 })()}
               </View>
-            ) : (
+            ) 
+            : (
               // -------------------------
               // split by item
               // -------------------------
@@ -835,19 +834,26 @@ const FriendItem = ({ friend }) => {
                 <View style={[styles.summaryCard, { backgroundColor: theme.colors.card, marginTop: 16 }]}>
                   <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>Who owes what</Text>
                   <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
-                    Base fee per person (fees + tax): ${baseFeePerPerson.toFixed(2)}
+                    Base fee per person: ${baseFeePerPerson.toFixed(2)}
                   </Text>
                   {memberList.map(m => {
                     const payerId = formData.payer;
                     const isPayer = payerId && String(payerId) === String(m.id);
                     const amt = Math.max(0, owedByPerson.get(m.id) || 0);
-                    const displayAmt = isPayer ? 0 : amt;
+
                     return (
                       <View key={m.id} style={styles.oweRow}>
-                        <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}: </Text>
-                        <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
-                          ${displayAmt.toFixed(2)}
-                        </Text>
+                        <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}:</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
+                            ${amt.toFixed(2)}
+                          </Text>
+                          {isPayer && (
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
+                              (paid)
+                            </Text>
+                          )}
+                        </View>
                       </View>
                     );
                   })}

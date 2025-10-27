@@ -4,7 +4,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+// require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('dotenv').config(); // load .env variables
 
 // route imports
 const authRoutes = require('./routes/auth');

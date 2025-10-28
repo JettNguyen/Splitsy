@@ -95,6 +95,7 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
 
   const groupOverlayOpacity = useRef(new Animated.Value(0)).current;
   const groupModalScale = useRef(new Animated.Value(0.96)).current;
+  const [showGroupDetails, setShowGroupDetails] = useState(false);
 
   useEffect(() => {
     if (showGroupDetails) {
@@ -133,7 +134,6 @@ function FriendsScreen({ theme, currentUser, userFriends = [], userGroups = [] }
 
   const [groups, setGroups] = useState([]);
   const [selectedGroupForDetails, setSelectedGroupForDetails] = useState(null);
-  const [showGroupDetails, setShowGroupDetails] = useState(false);
   const [groupBalance, setGroupBalance] = useState(null);
   
   React.useEffect(() => {

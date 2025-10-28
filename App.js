@@ -666,6 +666,7 @@ function MainApp() {
         );
       case 'friends':
         return (
+
           <FriendsScreen
             theme={theme}
             currentUser={currentUser}

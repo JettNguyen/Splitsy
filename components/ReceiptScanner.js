@@ -10,13 +10,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import Constants from 'expo-constants';
 const { IP_ADDRESS, PORT } = (Constants.expoConfig && Constants.expoConfig.extra) || {};
-const OCR_HOST = IP_ADDRESS || 'localhost';
-const OCR_PORT = PORT || '5000';
+const OCR_HOST = IP_ADDRESS;
+const OCR_PORT = '5000';
 // set this to your flask url
 // ios sim: http://127.0.0.1:5000/ocr
 // android emu: http://10.0.2.2:5000/ocr
 // real device: http://<your-computer-ip>:5000/ocr
-const BACKEND_URL = 'http://10.189.119.31:5000/ocr';   //`http://${OCR_HOST}:${OCR_PORT}/ocr`;
+const BACKEND_URL = `http://${OCR_HOST}:${OCR_PORT}/ocr`;
 
 const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   const { theme } = useTheme();

@@ -44,7 +44,7 @@ const ExpenseForm = ({visible,
     category: 'other',
     splitType: 'equal',
     participants: [],
-    items: [],            //data from receipt
+    items: [],            // data from receipt
     subtotal: 0,
     service_charge: 0,
     ...initialData
@@ -59,7 +59,7 @@ const ExpenseForm = ({visible,
   const [addItemPriceFocused, setAddItemPriceFocused] = useState(false);
 
   // "unit" assignments for split by item (expand qty → units)
-  const [unitAssignments, setUnitAssignments] = useState([]); 
+  const [unitAssignments, setUnitAssignments] = useState([]); // [{ unitid, memberid }]
   const [openUnit, setOpenUnit] = useState(null); // which unitid's dropdown is open (kept but unused now)
 
   const [assignModal, setAssignModal] = useState({ open: false, unitId: null });
@@ -134,7 +134,9 @@ useEffect(() => {
     return `$${n.toFixed(2)}`;
   };
 
-  // validation and submit
+  // -------------------------
+  // validation + submit
+  // -------------------------
   const validateForm = () => {
     if (!formData.description.trim()) return 'Please enter a description';
     // accept either an entered amount or items with subtotal
@@ -193,7 +195,9 @@ useEffect(() => {
     }
   };
 
-  //handle group and participants
+  // -------------------------
+  // group + participants
+  // -------------------------
 const handleGroupSelect = (groupId) => {
   const current = formData.groupId;
   if (current === groupId) {
@@ -231,7 +235,9 @@ const handleFriendSelect = (friendId) => {
   });
 };
 
-  // scan receipt and populate fields
+  // -------------------------
+  // receipt scanner → populate fields
+  // -------------------------
   const handleReceiptScanned = (receiptData) => {
     if (receiptData) {
       const merchant = receiptData.merchant || receiptData.description || '';
@@ -295,6 +301,59 @@ const handleFriendSelect = (friendId) => {
     }
     setShowReceiptScanner(false);
   };
+const rebuildUnitAssignments = (items, splitType) => {
+  if (splitType === 'equal') {
+    return [{
+      unitId: 'equal-split',
+      name: 'Equal Split',
+      unitPrice: items.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0),
+      memberId: null,
+    }];
+  } else if (splitType === 'byItem') {
+    const flatUnits = [];
+    items.forEach((item, idx) => {
+      const qty = item.qty || 1;
+      for (let u = 0; u < qty; u++) {
+        flatUnits.push({
+          unitId: `${idx}-${u}`,
+          name: item.name,
+          unitPrice: item.price || 0,
+          memberId: null,
+        });
+      }
+    });
+    console.log('Rebuilt unit assignments:', flatUnits);
+    return flatUnits;
+  }
+  return [];
+};
+useEffect(() => {
+  const units = rebuildUnitAssignments(formData.items, formData.splitType);
+  setUnitAssignments(units);
+}, [formData.items, formData.splitType]);
+
+const calculateParticipantShares = (splitType, unitAssignments, participants, totalAmount) => {
+  if (splitType === 'equal') {
+    const share = totalAmount / participants.length;
+    return participants.map(p => ({ memberId: p.id, amount: share }));
+  } else if (splitType === 'byItem') {
+    const participantAmounts = {};
+    unitAssignments.forEach(unit => {
+      if (unit.memberId) {
+        participantAmounts[unit.memberId] = (participantAmounts[unit.memberId] || 0) + unit.unitPrice;
+      }
+    });
+    const shares = participants.map(p => ({
+      memberId: p.id,
+      amount: participantAmounts[p.id] || 0,
+    }));
+    console.log('By item split shares:', shares);
+    return shares;
+  }
+  return [];
+};
+
+
 
   const handleAddItem = () => {
     // validate
@@ -357,7 +416,9 @@ const handleFriendSelect = (friendId) => {
     setUnitAssignments(flatUnits.map(u => ({ unitId: u.unitId, memberId: null })));
   };
 
-  // split logic (equal or by item)
+  // -------------------------
+  // split logic (equal / by item)
+  // -------------------------
   const nMoney = (v) => {
     if (v === null || v === undefined) return 0;
     const s = ('' + v).toString().replace(/[^0-9.-]/g, '');
@@ -383,7 +444,14 @@ const memberList = useMemo(() => {
     return { id: userId, name: 'Unknown' };
   });
 }, [formData.participants, friends, groups]);
-
+const updateUnitsWhenSplitTypeOrItemsChange = (items, splitType, participants) => {
+  const newUnits = rebuildUnitAssignments(items, splitType, participants);
+  setUnitAssignments(newUnits);
+};
+const onSplitTypeChange = (newSplitType) => {
+  updateFormData('splitType', newSplitType);
+  updateUnitsWhenSplitTypeOrItemsChange(formData.items, newSplitType, formData.participants);
+};
 // payer candidates: current user (You) plus selected members (deduped)
 const payerCandidates = useMemo(() => {
   const meId = currentUser && (currentUser.id || currentUser._id);
@@ -413,7 +481,7 @@ const payerCandidates = useMemo(() => {
   const subtotalNum = formData.subtotal || formData.items.reduce((s, it) => s + nMoney(it.price), 0);
   const groupSize = Math.max(1, memberList.length);
 
-  // total - subtotal (includes tax and all fees)
+  // total - subtotal (includes tax & all fees)
   const serviceChargeAmount = Math.max(0, totalNum - subtotalNum);
   const baseFeePerPerson = serviceChargeAmount / groupSize;
 
@@ -435,7 +503,9 @@ const payerCandidates = useMemo(() => {
     return m?.name || 'Assign to';
   };
 
+  // -------------------------
   // render helpers
+  // -------------------------
   const CategoryItem = ({ category }) => {
     const isSelected = formData.category === category.id;
     return (
@@ -694,196 +764,182 @@ const FriendItem = ({ friend }) => {
           </ScrollView>
         </View>
   );
+case 3:
+  // Calculate shares based on splitType, unitAssignments, members, and total amount
+  const shares = calculateParticipantShares(
+    formData.splitType,
+    unitAssignments,
+    memberList,
+    totalNum
+  );
 
-      case 3:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
-              Split Details
-            </Text>
+  return (
+    <View style={styles.stepContent}>
+      <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
+        Split Details
+      </Text>
 
-            <View style={[styles.summaryCard, { backgroundColor: theme.colors.card }]}>
-              <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>
-                Summary
-              </Text>
-              <Text style={[styles.summaryAmount, { color: theme.colors.primary }]}>
-                {formatCurrency(nMoney(formData.amount)) || '$0.00'}
-              </Text>
-              <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
-                Subtotal: {formatCurrency(subtotalNum) || '$0.00'}
-              </Text>
-              <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
-                Service Charge (including tax): {formatCurrency(serviceChargeAmount) || '$0.00'}
-              </Text>
-              <Text style={[styles.summaryDescription, { color: theme.colors.textSecondary }]}>
-                {formData.description}
-              </Text>
-              <Text style={[styles.summaryGroup, { color: theme.colors.textSecondary }]}>
-                {selectedGroup?.name || 'No group'} • {memberList.length} people
-              </Text>
-            </View>
+      <View style={[styles.summaryCard, { backgroundColor: theme.colors.card }]}>
+        <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>
+          Summary
+        </Text>
+        <Text style={[styles.summaryAmount, { color: theme.colors.primary }]}>
+          {formatCurrency(nMoney(formData.amount)) || '$0.00'}
+        </Text>
+        <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
+          Subtotal: {formatCurrency(subtotalNum) || '$0.00'}
+        </Text>
+        <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
+          Service Charge (including tax): {formatCurrency(serviceChargeAmount) || '$0.00'}
+        </Text>
+        <Text style={[styles.summaryDescription, { color: theme.colors.textSecondary }]}>
+          {formData.description}
+        </Text>
+        <Text style={[styles.summaryGroup, { color: theme.colors.textSecondary }]}>
+          {selectedGroup?.name || 'No group'} • {memberList.length} people
+        </Text>
+      </View>
 
-            {/* split mode toggle */}
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-              <TouchableOpacity
-                onPress={() => updateFormData('splitType', 'equal')}
-                style={[
-                  styles.splitToggle,
-                  {
-                    backgroundColor: formData.splitType === 'equal' ? theme.colors.primary : theme.colors.surface,
-                    borderColor: theme.colors.primary
-                  }
-                ]}>
-                <Text style={{ color: formData.splitType === 'equal' ? 'white' : theme.colors.primary, fontWeight: '700' }}>
-                  Split Evenly
+      {/* split mode toggle */}
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+        <TouchableOpacity
+          onPress={() => onSplitTypeChange('equal')}
+          style={[
+            styles.splitToggle,
+            {
+              backgroundColor: formData.splitType === 'equal' ? theme.colors.primary : theme.colors.surface,
+              borderColor: theme.colors.primary,
+            }
+          ]}
+        >
+          <Text style={{ color: formData.splitType === 'equal' ? 'white' : theme.colors.primary, fontWeight: '700' }}>
+            Split Evenly
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onSplitTypeChange('byItem')}
+          style={[
+            styles.splitToggle,
+            {
+              backgroundColor: formData.splitType === 'byItem' ? theme.colors.primary : theme.colors.surface,
+              borderColor: theme.colors.primary,
+            }
+          ]}
+        >
+          <Text style={{ color: formData.splitType === 'byItem' ? 'white' : theme.colors.primary, fontWeight: '700' }}>
+            Split by Item
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {formData.splitType === 'equal' ? (
+        <View style={{ marginTop: 16 }}>
+          {memberList.map(m => {
+            const isPayer = formData.payer && String(formData.payer) === String(m.id);
+            const participantShare = shares.find(s => s.memberId === m.id);
+            const displayAmount = isPayer ? 0 : (participantShare ? participantShare.amount : 0);
+            return (
+              <View key={m.id} style={styles.oweRow}>
+                <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}</Text>
+                <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
+                  ${displayAmount.toFixed(2)}
                 </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => updateFormData('splitType', 'byItem')}
-                style={[
-                  styles.splitToggle,
-                  {
-                    backgroundColor: formData.splitType === 'byItem' ? theme.colors.primary : theme.colors.surface,
-                    borderColor: theme.colors.primary
-                  }
-                ]}>
-                <Text style={{ color: formData.splitType === 'byItem' ? 'white' : theme.colors.primary, fontWeight: '700' }}>
-                  Split by Item
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {formData.splitType === 'equal' ? (
-              // -------------------------
-              // split evenly
-              // -------------------------
-              <View style={{ marginTop: 16 }}>
-                {(() => {
-                  const perShare = totalNum / Math.max(1, memberList.length);
-                  const payerId = formData.payer;
-                  return memberList.map(m => {
-                    const isPayer = payerId && String(payerId) === String(m.id);
-                    //const displayAmount = isPayer ? 0 : perShare;
-                    return (
-                      <View key={m.id} style={styles.oweRow}>
-                        <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-
-                        <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
-                          ${perShare.toFixed(2)}
-                        </Text>
-                        {isPayer && (
-                <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
-                  (paid)
-                </Text>
-              )}
               </View>
-                      </View>
-                    );
-                  });
-                })()}
-              </View>
-            ) 
-            : (
-              // -------------------------
-              // split by item
-              // -------------------------
-              <View style={{ marginTop: 16 }}>
-                <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>
-                  Assign each item to a person: 
-                </Text>
+            );
+          })}
+        </View>
+      ) : (
+        <View style={{ marginTop: 16 }}>
+          <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>
+            Assign each item to a person:
+          </Text>
 
-                {flatUnits.length === 0 ? (
-                  <Text style={{ color: theme.colors.textSecondary }}>No items found on this receipt.</Text>
-                ) : (
-                  flatUnits.map(u => {
-                    const a = unitAssignments.find(x => x.unitId === u.unitId);
-                    const selectedId = a?.memberId || (memberList[0] && memberList[0].id);
-                    return (
-                      <View key={u.unitId} style={styles.unitRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ color: theme.colors.text }}>{u.name}</Text>
-                          <Text style={{ color: theme.colors.textSecondary }}>${u.unitPrice.toFixed(2)}</Text>
-                        </View>
+          {flatUnits.length === 0 ? (
+            <Text style={{ color: theme.colors.textSecondary }}>No items found on this receipt.</Text>
+          ) : (
+            flatUnits.map(u => {
+              const a = unitAssignments.find(x => x.unitId === u.unitId);
+              const selectedId = a?.memberId || (memberList[0] && memberList[0].id);
+              return (
+                <View key={u.unitId} style={styles.unitRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.colors.text }}>{u.name}</Text>
+                    <Text style={{ color: theme.colors.textSecondary }}>${u.unitPrice.toFixed(2)}</Text>
+                  </View>
 
-                        <TouchableOpacity
-                          onPress={() => setAssignModal({ open: true, unitId: u.unitId })}
-                          style={{
-                            paddingHorizontal: 14,
-                            paddingVertical: 10,
-                            borderRadius: 10,
-                            borderWidth: 2,
-                            borderColor: theme.colors.primary,
-                            backgroundColor: theme.colors.surface,
-                            minWidth: 140,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>
-                            {getAssignedName(u.unitId)}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })
-                )}
-
-                {/* per-person totals */}
-                <View style={[styles.summaryCard, { backgroundColor: theme.colors.card, marginTop: 16 }]}>
-                  <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>Who owes what</Text>
-                  <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
-                    Base fee per person: ${baseFeePerPerson.toFixed(2)}
-                  </Text>
-                  {memberList.map(m => {
-                    const payerId = formData.payer;
-                    const isPayer = payerId && String(payerId) === String(m.id);
-                    const amt = Math.max(0, owedByPerson.get(m.id) || 0);
-
-                    return (
-                      <View key={m.id} style={styles.oweRow}>
-                        <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}:</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
-                            ${amt.toFixed(2)}
-                          </Text>
-                          {isPayer && (
-                            <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
-                              (paid)
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    );
-                  })}
+                  <TouchableOpacity
+                    onPress={() => setAssignModal({ open: true, unitId: u.unitId })}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      borderColor: theme.colors.primary,
+                      backgroundColor: theme.colors.surface,
+                      minWidth: 140,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>
+                      {getAssignedName(u.unitId)}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-              </View>
-            )}
+              );
+            })
+          )}
 
-              {/* Payer selector - placed here in Step 3 after members are selected */}
-              <View style={{ marginTop: 18 }}>
-                <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Who paid the total?</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                  {payerCandidates.map(pc => {
-                    const selected = String(formData.payer) === String(pc.id);
-                    return (
-                      <TouchableOpacity
-                        key={pc.id}
-                        onPress={() => updateFormData('payer', pc.id)}
-                        style={[
-                          styles.payerChip,
-                          { borderColor: selected ? theme.colors.primary : theme.colors.border, backgroundColor: selected ? theme.colors.primary : theme.colors.surface }
-                        ]}
-                      >
-                        <Text style={{ color: selected ? 'white' : theme.colors.text, fontWeight: '700' }}>{pc.name}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
+          {/* per-person totals */}
+          <View style={[styles.summaryCard, { backgroundColor: theme.colors.card, marginTop: 16 }]}>
+            <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>Who owes what</Text>
+            <Text style={{ color: theme.colors.textSecondary, marginBottom: 6 }}>
+              Base fee per person (fees + tax): ${baseFeePerPerson.toFixed(2)}
+            </Text>
+            {memberList.map(m => {
+              const payerId = formData.payer;
+              const isPayer = payerId && String(payerId) === String(m.id);
+              const share = shares.find(s => s.memberId === m.id);
+              const amt = share ? Math.max(0, share.amount) : 0;
+              const displayAmt = isPayer ? 0 : amt;
+              return (
+                <View key={m.id} style={styles.oweRow}>
+                  <Text style={[styles.oweName, { color: theme.colors.text }]}>{m.name}: </Text>
+                  <Text style={[styles.oweAmount, { color: theme.colors.text }]}>
+                    ${displayAmt.toFixed(2)}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
-        );
+        </View>
+      )}
+
+      {/* Payer selector */}
+      <View style={{ marginTop: 18 }}>
+        <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Who paid the total?</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+          {payerCandidates.map(pc => {
+            const selected = String(formData.payer) === String(pc.id);
+            return (
+              <TouchableOpacity
+                key={pc.id}
+                onPress={() => updateFormData('payer', pc.id)}
+                style={[
+                  styles.payerChip,
+                  { borderColor: selected ? theme.colors.primary : theme.colors.border, backgroundColor: selected ? theme.colors.primary : theme.colors.surface }
+                ]}
+              >
+                <Text style={{ color: selected ? 'white' : theme.colors.text, fontWeight: '700' }}>{pc.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    </View>
+  );
+
     }
   };
 

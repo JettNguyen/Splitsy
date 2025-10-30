@@ -27,7 +27,6 @@ const ActivityScreen = () => {
   const [userTransactions, setUserTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // load the user's transactions (includes friend transactions)
   useEffect(() => {
     const loadUserTransactions = async () => {
       if (!currentUser) return;
@@ -58,21 +57,58 @@ const ActivityScreen = () => {
     fetchUserBalances();
   }, [currentUser]);
 
-  const getFilteredActivity = () => {
+const getFilteredActivity = () => {
+  let activities = [...(userTransactions || [])];
 
-    let activities = [...(userTransactions || [])];
+  // Sort by date (newest first)
+  activities.sort(
+    (a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
+  );
+
+  if (filter === "expenses") {
+    activities = activities.filter(
+      (t) =>
+        t.payer?._id !== currentUser?.id &&
+        t.payer !== currentUser?.id
+    );
+  } 
+  else if (filter === "settlements" || filter === "all") {
+    let expanded = [];
+    activities.forEach((t) => {
+      const isPayer =
+        t.payer?._id === currentUser?.id || t.payer === currentUser?.id;
+
     
-    activities.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
-    
-    if (filter === 'expenses') {
-      activities = activities.filter(t => t.type !== 'settlement');
-    } 
-    else if (filter === 'settlements') {
-      activities = activities.filter(t => t.type === 'settlement');
-    }
-    
-    return activities;
-  };
+      t.participants.forEach((p) => {
+        const participantId = p.user?._id || p.user;
+        const unpaid = !p.paid;
+
+        // For settlements tab — only include unpaid participants if you're the payer
+        if (filter === "settlements") {
+          if (isPayer && participantId !== currentUser?.id && unpaid) {
+            expanded.push({ ...t, singleParticipant: p });
+          }
+        } 
+        // For all tab — include all participants (paid and unpaid)
+        else if (filter === "all") {
+          if (isPayer && participantId !== currentUser?.id) {
+            expanded.push({ ...t, singleParticipant: p });
+          } 
+          // If you're not the payer, show your own owe entry
+          else if (!isPayer && participantId === currentUser?.id) {
+            expanded.push({ ...t, singleParticipant: p });
+          }
+        }
+      });
+    });
+    activities = expanded;
+  }
+
+  return activities;
+};
+
+
+
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -91,88 +127,145 @@ const ActivityScreen = () => {
     });
   };
 
-  const getActivityIcon = (transaction) => {
-    if (transaction.type === 'settlement') return 'card';
-    
-  // calculate whether the user lent (arrow up) or borrowed (arrow down)
-    const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
-    const userParticipant = transaction.participants?.find(p => 
-      p.user === currentUser?.id || p.user?._id === currentUser?.id
-    );
-    const userOwedAmount = userParticipant?.amount || 0;
-    const userPaidAmount = userWasPayer ? transaction.amount : 0;
-    const netAmount = userPaidAmount - userOwedAmount;
-    
-    return netAmount > 0 ? 'arrow-up' : 'arrow-down';
-  };
+ const getActivityIcon = (transaction) => {
+  const isPayer =
+    transaction.payer?._id === currentUser?.id ||
+    transaction.payer === currentUser?.id;
 
-  const getActivityColor = (transaction) => {
-    if (transaction.type === 'settlement') return theme.colors.accent;
-    
-    const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
-    const userParticipant = transaction.participants?.find(p => 
-      p.user === currentUser?.id || p.user?._id === currentUser?.id
-    );
-    const userOwedAmount = userParticipant?.amount || 0;
-    const userPaidAmount = userWasPayer ? transaction.amount : 0;
-    const netAmount = userPaidAmount - userOwedAmount;
-    
-    return netAmount > 0 ? theme.colors.success : theme.colors.error;
-  };
+  const someoneUnpaid = transaction.participants?.some((p) => !p.paid);
 
-  const getActivityDescription = (transaction) => {
-    if (transaction.type === 'settlement') {
-      const group = userGroups?.find(g => g.id === transaction.group);
-      const groupName = group?.name || 'Unknown Group';
-      return `Settlement in ${groupName}`;
-    }
+  if (isPayer && someoneUnpaid) return "arrow-up"; // you're owed
+  if (!isPayer) return "arrow-down"; // you owe
+  return "checkmark"; // settled or even
+};
+
+const getActivityColor = (transaction) => {
+  const isPayer =
+    transaction.payer?._id === currentUser?.id ||
+    transaction.payer === currentUser?.id;
+
+  const someoneUnpaid = transaction.participants?.some((p) => !p.paid);
+
+  if (isPayer && someoneUnpaid) return theme.colors.success; // you’re owed
+  if (!isPayer) return theme.colors.error; // you owe
+  return theme.colors.textSecondary; // settled
+};
+
+const getActivityDescription = (transaction) => {
+  const isPayer =
+    transaction.payer?._id === currentUser?.id ||
+    transaction.payer === currentUser?.id;
+
+  const groupName =
+    transaction.group
+      ? userGroups?.find(
+          (g) => g.id === transaction.group || g._id === transaction.group
+        )?.name
+      : null;
+
+  const itemName = transaction.description || "Transaction";
+
+  if (isPayer) {
+    const unpaidParticipants = transaction.participants.filter(
+  (p) =>
+    (p.user._id !== currentUser?.id && p.user !== currentUser?.id) &&
+    !p.paid
+);
     
-  // determine whether the current user was the payer
-    const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
-    
-  // calculate what the user owes vs what they paid
-    const userParticipant = transaction.participants?.find(p => 
-      p.user === currentUser?.id || p.user?._id === currentUser?.id
+   return (
+  <View style={{ paddingVertical: 6 }}>
+    <View style={{ backgroundColor: theme.colors.primary + '11', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' }}>
+      <Text style={{ fontSize: 16, fontWeight: '700' }}>{transaction.description || "Transaction"}</Text>
+    </View>
+
+    <View style={{ marginTop: 5 }}>
+      {unpaidParticipants.map((p) => (
+        <View
+          key={p.user._id}
+          style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.colors.success + '22',
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 12,
+              marginRight: 6,
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.success }}>
+              {p.user.name || p.name || "Someone"}
+            </Text>
+          </View>
+          <Text
+            style={{
+              fontSize: 14,
+              fontStyle: 'italic',
+              color: theme.colors.textSecondary,
+            }}
+          >
+            owes you{transaction.group ? ` ‣ ${userGroups?.find(g => g.id === transaction.group || g._id === transaction.group)?.name || ''}` : ''}
+          </Text>
+        </View>
+      ))}
+    </View>
+  </View>
+);
+  } else {
+    const payerParticipant =
+      transaction.payer?._id === currentUser?.id ? null : transaction.payer;
+
+    const participantName =
+      payerParticipant?.name || payerParticipant?.user?.name || "Someone";
+
+    return (
+      <View style={{ paddingVertical: 6 }}>
+        <View style={{ backgroundColor: theme.colors.primary + '11', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' }}>
+          <Text style={{ fontSize: 16, fontWeight: '700'}}>{itemName}</Text>
+        </View>
+
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontStyle: 'italic',
+              color: theme.colors.textSecondary,
+            }}
+          >
+            You owe{' '}
+          </Text>
+          <View
+            style={{
+              backgroundColor: theme.colors.error + '22', // subtle orange pill
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 12,
+              marginRight: 6,
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.error }}>
+              {participantName}
+            </Text>
+          </View>
+          {groupName && (
+            <Text
+              style={{
+                fontSize: 14,
+                fontStyle: 'italic',
+                color: theme.colors.textSecondary,
+              }}
+            >
+              ‣ {groupName}
+            </Text>
+          )}
+        </View>
+      </View>
     );
-    const userOwedAmount = userParticipant?.amount || 0;
-    const userPaidAmount = userWasPayer ? transaction.amount : 0;
-    
-  // determine if user lent (paid more than they owe) or borrowed (paid less than they owe)
-    const isLending = userPaidAmount > userOwedAmount;
-    const isBorrowing = userPaidAmount < userOwedAmount;
-    
-  // find the other person's name for one-on-one transactions
-    let otherPersonName = '';
-    if (!transaction.group) {
-      if (userWasPayer) {
-        const otherParticipant = transaction.participants?.find(p => 
-          (p.user?._id || p.user) !== currentUser?.id
-        );
-        otherPersonName = otherParticipant?.user?.name || otherParticipant?.name || 'Friend';
-      } else {
-        otherPersonName = transaction.payer?.name || 'Friend';
-      }
-    }
-    
-    const itemName = transaction.description;
-    const groupName = transaction.group ? 
-      (userGroups?.find(g => g.id === transaction.group)?.name || 'Unknown Group') : 
-      null;
-    
-    if (isLending) {
-      return groupName ? 
-        `You lent • ${itemName} • ${groupName}` : 
-        `${otherPersonName} owes you • ${itemName}`;
-    } else if (isBorrowing) {
-      return groupName ? 
-        `You borrowed • ${itemName} • ${groupName}` : 
-        `You owe ${otherPersonName} • ${itemName}`;
-    } else {
-      return groupName ? 
-        `Split evenly • ${itemName} • ${groupName}` : 
-        `Split evenly • ${itemName}`;
-    }
-  };
+  }
+};
+
+
 
   const FilterButton = ({ filterType, label }) => (
     <TouchableOpacity
@@ -199,53 +292,149 @@ const ActivityScreen = () => {
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [selectedTxForModal, setSelectedTxForModal] = useState(null);
 
-  const ActivityItem = ({ transaction }) => {
-    const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
-    const userParticipant = transaction.participants?.find(p => 
-      p.user === currentUser?.id || p.user?._id === currentUser?.id
-    );
-    const userOwedAmount = userParticipant?.amount || 0;
-    const userPaidAmount = userWasPayer ? transaction.amount : 0;
-    
-   const netAmount = Number(userPaidAmount) - Number(userOwedAmount);
-   const sign = netAmount >= 0 ? '+' : '-';
-   const formattedAmount = `${sign}${Math.abs(netAmount).toFixed(2)}`;
-    
-    const isSettled = !!(transaction.settled || transaction.settlements?.length || transaction.status === 'settled' || transaction.isPaid);
+const ActivityItem = ({ transaction }) => {
+const isPayer =
+  transaction.payer?._id === currentUser?.id ||
+  transaction.payer === currentUser?.id;
 
-    return (
-      <TouchableOpacity activeOpacity={0.9} onPress={() => { setSelectedTxForModal(transaction); setShowBalanceModal(true); }}>
-        <View style={[styles.activityItem, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}> 
-        {/* left icon */}
-        <View style={[styles.activityIcon, { backgroundColor: getActivityColor(transaction) }]}> 
-          <Ionicons name={getActivityIcon(transaction)} size={18} color="white" />
+const participant = transaction.singleParticipant; // set during flattening
+let amount = 0;
+
+if (participant) {
+  // In flattened mode (each card represents a specific participant)
+  amount = participant.amount || 0;
+} else if (isPayer) {
+  // You're the payer → show how much each *unpaid participant* owes you total
+  const unpaidParticipants = transaction.participants?.filter(
+    (p) => !p.paid && (p.user !== currentUser?.id && p.user?._id !== currentUser?.id)
+  );
+  amount = unpaidParticipants?.reduce((sum, p) => sum + (p.amount || 0), 0);
+} else {
+  const userParticipant = transaction.participants?.find(
+    (p) => p.user === currentUser?.id || p.user?._id === currentUser?.id
+  );
+  amount = userParticipant?.amount || 0;
+}
+
+const sign = isPayer ? "+" : "-";
+const formattedAmount = `${sign}${Math.abs(amount).toFixed(2)}`;
+
+  // --- figure out who owes who ---
+  let displayName = "";
+  let owesText = "";
+  let color = theme.colors.textSecondary;
+
+  if (isPayer) {
+    const name = participant?.user?.name || participant?.name || "Someone";
+    displayName = name;
+    owesText = "owes you";
+    color = theme.colors.success;
+  } else {
+    const payerName =
+      transaction.payer?.name || transaction.payer?.user?.name || "Someone";
+    displayName = payerName;
+    owesText = "You owe";
+    color = theme.colors.error;
+  }
+
+  const iconName = isPayer ? "arrow-up" : "arrow-down";
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={() => {
+        setSelectedTxForModal(transaction);
+        setShowBalanceModal(true);
+      }}
+    >
+      <View
+        style={[
+          styles.activityItem,
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+        ]}
+      >
+        {/* Left icon */}
+        <View style={[styles.activityIcon, { backgroundColor: color }]}>
+          <Ionicons name={iconName} size={18} color="white" />
         </View>
 
-        {/* center content */}
+        {/* Center content */}
         <View style={styles.activityContent}>
-          <Text style={[styles.activityDescription, { color: theme.colors.text }]}>
-            {getActivityDescription(transaction)}
+          <Text
+            style={[styles.activityDescription, { color: theme.colors.text }]}
+          >
+            {transaction.description || "Transaction"}
           </Text>
-          <Text style={[styles.activityDate, { color: theme.colors.textSecondary }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 5 }}>
+  {isPayer ? (
+    <>
+      <View
+        style={{
+          backgroundColor: color + "22",
+          paddingHorizontal: 8,
+          paddingVertical: 3,
+          borderRadius: 12,
+          marginRight: 6,
+        }}
+      >
+        <Text style={{ fontSize: 14, fontWeight: "600", color }}>
+          {displayName}
+        </Text>
+      </View>
+      <Text
+        style={{
+          fontSize: 14,
+          fontStyle: "italic",
+          color: theme.colors.textSecondary,
+        }}
+      >
+        owes you
+      </Text>
+    </>
+  ) : (
+    <>
+      <Text
+        style={{
+          fontSize: 14,
+          fontStyle: "italic",
+          color: theme.colors.textSecondary,
+        }}
+      >
+        You owe{' '}
+      </Text>
+      <View
+        style={{
+          backgroundColor: color + "22",
+          paddingHorizontal: 8,
+          paddingVertical: 3,
+          borderRadius: 12,
+        }}
+      >
+        <Text style={{ fontSize: 14, fontWeight: "600", color }}>
+          {displayName}
+        </Text>
+      </View>
+    </>
+  )}
+</View>
+
+
+          <Text
+            style={[styles.activityDate, { color: theme.colors.textSecondary }]}
+          >
             {formatDate(transaction.date || transaction.createdAt)}
           </Text>
         </View>
 
-        {/* right amount + status */}
-        <View style={styles.activityAmount}> 
-          <Text style={[
-            styles.amountText, 
-            { color: Number(netAmount) > 0 ? theme.colors.success : theme.colors.error }
-          ]}>
-           {formattedAmount}
-          </Text>
-          {/* color-coded status circle matching home page */}
-          <View style={[AppStyles.statusCircle, { backgroundColor: isSettled ? '#4CAF50' : '#FF9800', marginTop: 6 }]} />
+        {/* Right amount */}
+        <View style={styles.activityAmount}>
+          <Text style={[styles.amountText, { color }]}>{formattedAmount}</Text>
         </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+      </View>
+    </TouchableOpacity>
+  );
+};
+
 
   const filteredActivity = getFilteredActivity();
 
@@ -269,8 +458,8 @@ const ActivityScreen = () => {
         {/*filter buttons*/}
         <View style={[styles.filterContainer, { backgroundColor: theme.colors.card }]}>
           <FilterButton filterType="all" label="All" />
-          <FilterButton filterType="expenses" label="Expenses" />
-          <FilterButton filterType="settlements" label="Settlements" />
+          <FilterButton filterType="expenses" label="To Pay" />
+          <FilterButton filterType="settlements" label="To Receive" />
         </View>
       
         {/*activity list*/}

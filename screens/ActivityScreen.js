@@ -27,6 +27,7 @@ const ActivityScreen = () => {
   const [userTransactions, setUserTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // load the user's transactions (includes friend transactions)
   useEffect(() => {
     const loadUserTransactions = async () => {
       if (!currentUser) return;
@@ -93,6 +94,7 @@ const ActivityScreen = () => {
   const getActivityIcon = (transaction) => {
     if (transaction.type === 'settlement') return 'card';
     
+  // calculate whether the user lent (arrow up) or borrowed (arrow down)
     const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
     const userParticipant = transaction.participants?.find(p => 
       p.user === currentUser?.id || p.user?._id === currentUser?.id
@@ -125,17 +127,21 @@ const ActivityScreen = () => {
       return `Settlement in ${groupName}`;
     }
     
+  // determine whether the current user was the payer
     const userWasPayer = transaction.payer && transaction.payer._id === currentUser?.id;
     
+  // calculate what the user owes vs what they paid
     const userParticipant = transaction.participants?.find(p => 
       p.user === currentUser?.id || p.user?._id === currentUser?.id
     );
     const userOwedAmount = userParticipant?.amount || 0;
     const userPaidAmount = userWasPayer ? transaction.amount : 0;
     
+  // determine if user lent (paid more than they owe) or borrowed (paid less than they owe)
     const isLending = userPaidAmount > userOwedAmount;
     const isBorrowing = userPaidAmount < userOwedAmount;
     
+  // find the other person's name for one-on-one transactions
     let otherPersonName = '';
     if (!transaction.group) {
       if (userWasPayer) {

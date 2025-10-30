@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Linking } from 'react-native';
 
+// api service for communicating with the backend
+// backend server url (uses expo extras in development)
 const { IP_ADDRESS, PORT, PROD_API_URL } = (Constants.expoConfig && Constants.expoConfig.extra) || {};
 const devIp = IP_ADDRESS || 'localhost';
 const devPort = PORT || '3000';
@@ -15,6 +17,7 @@ class ApiService {
     this.token = null;
   }
 
+  // initialize the service and load stored token
   async init() {
     try {
       if (this.token) return;
@@ -51,10 +54,7 @@ class ApiService {
   // generic api call method
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-  // debug: whether a token is present at call time (redacted)
-  // avoid noisy debug logs here; errors are handled below
     
-  // merge headers so callers can pass extra headers without removing authorization
     const mergedHeaders = { ...this.getAuthHeaders(), ...(options.headers || {}) };
     const config = {
       method: options.method || 'GET',
@@ -111,7 +111,6 @@ class ApiService {
   // parsed response (json or text)
       return data;
     } catch (error) {
-  // log a concise message; include extra debug info only in development
       console.error(`API Error [${config.method} ${url}]:`, error.message);
       if ((process.env.NODE_ENV || 'development') === 'development') {
         console.debug && console.debug('Request debug:', {
@@ -421,7 +420,6 @@ class ApiService {
   }
 
 
-  // debug: return authenticated user and populated friends (dev only)
   async getDebugUser() {
     return await this.makeRequest('/users/debug');
   }

@@ -582,7 +582,6 @@ function MainApp() {
     try {
       // transform the expensedata into api payload
       const amount = parseFloat(expenseData.amount);
-      // normalize participants: they might be ids or objects; ensure { user } shape
       let participants = (expenseData.participants || []).map(id => ({ user: id }));
 
       // ensure payer is included as participant when appropriate
@@ -591,7 +590,6 @@ function MainApp() {
         participants = [{ user: payerId }, ...participants];
       }
 
-      // for now, do equal split calculation
       const perPerson = Math.round((amount / participants.length) * 100) / 100;
       let remaining = Math.round((amount - perPerson * participants.length) * 100) / 100;
       const participantsWithAmounts = participants.map((p, idx) => {

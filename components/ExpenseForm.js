@@ -60,7 +60,7 @@ const ExpenseForm = ({visible,
 
   // "unit" assignments for split by item (expand qty → units)
   const [unitAssignments, setUnitAssignments] = useState([]); 
-  const [openUnit, setOpenUnit] = useState(null); // which unitid's dropdown is open (kept but unused now)
+  const [openUnit, setOpenUnit] = useState(null);
 
   const [assignModal, setAssignModal] = useState({ open: false, unitId: null });
 
@@ -253,7 +253,6 @@ const handleFriendSelect = (friendId) => {
       const total = parseFloat(totalStr) || 0;
       const service_charge = Math.max(0, total - subtotal);
 
-      // test participants for now
       let participants = formData.participants;
       if (!formData.groupId || participants.length === 0) {
         participants = ['Harry', 'Ron', 'Hermione'];

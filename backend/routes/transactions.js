@@ -25,7 +25,7 @@ router.get('/user/balances', protect, async (req, res) => {
       };
     }));
 
-    // calculate balances for friend-to-friend transactions (transactions without a group)
+    // calculate balances for friend-to-friend transactions
     const friendTransactions = await Transaction.find({
       $and: [
         { 
@@ -178,9 +178,9 @@ router.post('/', protect, async (req, res) => {
       .populate('participants.user', 'id name email')
       .lean();
 
-    // update group's totals asynchronously (best-effort)
+    // update group's totals asynchronously
     try {
-        if (tx.group) { // <-- check that group is truthy
+        if (tx.group) {
           const group = await Group.findById(tx.group);
           if (group) await group.updateTotals();
         }

@@ -1,9 +1,6 @@
 // transaction controller: handles creating, listing, updating, and settling transactions
-// comments describe inputs/outputs at a high level
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
-
-
 
 async function createTransaction(req, res) {
   // create a new transaction from the request body
@@ -53,7 +50,6 @@ async function createTransaction(req, res) {
     });
 
   const saved = await tx.save();
-
 
     const populated = await Transaction.findById(saved._id)
       .populate('payer', 'name email')

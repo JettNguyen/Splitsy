@@ -88,9 +88,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
         saved_image_path: data.saved_image_path || ''
       });
 
-
-
-      
       setShowEditView(true);
     } catch (e) {
       console.error('ocr upload error:', e);
@@ -184,7 +181,6 @@ const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
       ...prev,
       items: updatedItems,
       subtotal: subtotal.toFixed(2),
-      // set total equal to subtotal for now (no tax/fees extracted)
       total: subtotal.toFixed(2)
     };
   });

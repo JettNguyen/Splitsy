@@ -31,7 +31,6 @@ const copyToClipboard = async (text) => {
       return true;
     }
   } catch (e) {
-    // try react-native's deprecated Clipboard
     try {
       // eslint-disable-next-line global-require
       const RN = require('react-native');
@@ -84,7 +83,6 @@ export default function BalanceDetailsModal({ visible, onClose, transactions = [
   }, [visible]);
 
   const handleSettle = async (transactionId) => {
-    // Instead of auto-picking a method, load the recipient's payment methods and display options
     try {
       // find the transaction in the list
       const tx = transactions.find(t => String(t._id || t.id) === String(transactionId));

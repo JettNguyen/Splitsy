@@ -274,7 +274,6 @@ const deleteGroup = async (req, res) => {
       });
     }
 
-  // mark group as inactive instead of deleting
     group.isActive = false;
     await group.save();
 

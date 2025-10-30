@@ -1,6 +1,4 @@
-// temporary mitigation for validator.js isurl advisory (ghsa-9965-vmph-33xx)
-// replaces validator.isurl with a safer runtime check using whatwg url parsing
-// until an upstream patch is available. this file should be required early during app startup.
+// temporary mitigation for validator.js
 
 try {
   // try to require validator package

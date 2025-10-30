@@ -77,9 +77,6 @@ exports.removeFriend = async (req, res) => {
   }
 };
 
-
-
-
 // get a friend's public payment methods by user id
 exports.getFriendPaymentMethods = async (req, res) => {
   try {
@@ -103,9 +100,6 @@ exports.getFriendPaymentMethods = async (req, res) => {
     return res.status(500).json({ success: false, message: 'server error' });
   }
 };
-
-
-// friend request endpoints
 
 // send a friend request
 exports.sendRequest = async (req, res, next) => {

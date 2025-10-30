@@ -1,10 +1,6 @@
-// temporary file to get things working - replace mocks with real models
-
-
 const { validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 
-// mock models (replace with your real mongoose models)
 const FriendRequest = mongoose.model('FriendRequest', new mongoose.Schema({
   from: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   to: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

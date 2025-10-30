@@ -1,4 +1,5 @@
 # Splitsy
+
 **Split expenses effortlessly with friends, family, and roommates**
 
 A React Native app for tracking shared expenses with receipt scanning and automated bill splitting.
@@ -6,74 +7,79 @@ A React Native app for tracking shared expenses with receipt scanning and automa
 ## Features
 
 - **Cross-Platform**: iOS & Android support
-- **Dark/Light Mode**: Theme switching
-- **Receipt Scanning**: OCR-powered data extraction
+- **Receipt Scanning**: Tesseract OCR data extraction
 - **Friend/Group Management**: Create and manage friends & groups
+- **Dark/Light Mode**: Theme switching
 
 ## Quick Start
 
 ### Prerequisites
+
 - **Node.js** 18.0+
 - **Expo Go** app on your phone
 
 ### Setup
 
 #### 1. Clone and Install Dependencies
+
 ```bash
-#clone the repository
+# clone the repository
 git clone https://github.com/JettNguyen/Splitsy.git
 cd Splitsy
 
-#install dependencies
+# install dependencies
 npm install
 npm install expo
 cd backend
 npm install
 
-#install tesseract
-brew install tesseract (Mac)
-download through the tesseract installer page (Windows)
-
-In backend/python_ocr/main.py, select the tesseract path based on what OS you have
+# install tesseract
+brew install tesseract # Mac
+# OR download through the tesseract installer page for Windows machines
+# In backend/python_ocr/main.py, select the tesseract path based on what OS you have
 ```
 
-#### 2. Use .env file (provided by me)
-- Ensure it is named `.env` with the dot
+#### 2. Use .env file (provided by the team)
 
-#### 3. Update IP in `app.config.js`
-- If you do not know your IP, run ipconfig (Windows) or ifconfig (Mac)
-- Also update IP in ReceiptScanner.js for BACKEND_URL
+- Ensure it is named `.env`
+
+#### 3. Update IP in `.env`, `app.config.js` & `ReceiptScanner.js`
+
+- If you do not know your IP, run `ipconfig` (Windows) or `ifconfig` (Mac)
+- Replace `IP_ADDRESS`'s IP value on line 2 of `Splitsy/.env`
+- Replace `IP_ADDRESS`'s IP value on line 6 of `Splitsy/app.config.js`
+- Replace `BACKEND_URL`'s IP value on line 19 of `Splitsy/components/ReceiptScanner.js` (after "https://" and before the ":5000")
 
 #### 4. Start the Application
+
 ```bash
-#terminal 1: start backend server
+# terminal 1: start backend server
 cd backend
 node server.js
+
 # OR use this: backend server that refreshes upon every change
 npm install -g nodemon
 nodemon server. js
 ```
+
 ```bash
 #terminal 2: start frontend
-cd ..
 npm start
 ```
+
 ```bash
 #terminal 3: start python ocr microservice
-
 cd backend/python_ocr
-
-python -m venv venv       #start python environment
-
+python -m venv venv          #start python environment
 venv\Scripts\activate        # windows  
-source venv/bin/activate     # mac/linux
-                             
+source venv/bin/activate     # mac/linux                           
 pip install flask flask-cors pillow pytesseract werkzeug    #install dependencies
 
-python main.py      #run the flask server
+python main.py               #run the flask server
 ```
 
 #### 5. Connect Your Device
+
 - Scan the QR code with Expo Go app
 
 ## Tech Stack
@@ -88,11 +94,13 @@ python main.py      #run the flask server
 ## API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
 - `GET /api/auth/profile` - Get user profile
 
 ### Groups
+
 - `GET /api/groups` - Get user's groups
 - `POST /api/groups` - Create new group
 - `PUT /api/groups/:id` - Update group
@@ -101,7 +109,12 @@ python main.py      #run the flask server
 - `DELETE /api/groups/:id/members/:userId` - Remove member from group
 
 ### Transactions
+
 - `GET /api/transactions/:groupId` - Get group transactions
 - `POST /api/transactions` - Create new transaction
 - `PUT /api/transactions/:id` - Update transaction
 - `DELETE /api/transactions/:id` - Delete transaction
+
+## Notes
+
+*AI was utilized in this project to assist in setting up the initial code environment and address specific backend implementation issues.*

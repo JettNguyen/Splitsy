@@ -13,10 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { FONT_FAMILY, FONT_FAMILY_BOLD } from '../styles/AppStyles';
+
+// context imports
 import { useUser } from '../context/UserContext';
 import { useData } from '../context/ApiDataContext';
 import { useTheme } from '../context/ThemeContext';
 
+// profile and settings screen component
 const ProfileScreen = ({ 
   onNavigateToPaymentMethods,
   onNavigateToNotifications,

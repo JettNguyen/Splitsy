@@ -253,7 +253,6 @@ const addPaymentMethod = async (req, res) => {
 
     const user = await User.findById(req.user._id);
 
-  // if this is marked default, clear the default flag on the other methods
     if (isDefault) {
       user.paymentMethods.forEach(method => {
         method.isDefault = false;

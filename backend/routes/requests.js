@@ -14,7 +14,7 @@ const { protect } = require('../middleware/auth');
 // all routes below require authentication
 router.use(protect);
 
-// post /api/users/requests → send a friend request
+// post /api/users/requests
 router.post(
   '/requests',
   [
@@ -28,10 +28,10 @@ router.post(
   sendFriendRequest
 );
 
-// get /api/users/requests → list all friend requests
+// get /api/users/requests
 router.get('/requests', listFriendRequests);
 
-// post /api/users/requests/:requestid/accept → accept a friend request
+// post /api/users/requests/:requestid/accept
 router.post(
   '/requests/:requestId/accept',
   [
@@ -44,7 +44,7 @@ router.post(
   acceptFriendRequest
 );
 
-// delete /api/users/requests/:requestid → decline a friend request
+// delete /api/users/requests/:requestid
 router.delete(
   '/requests/:requestId',
   [

@@ -23,7 +23,6 @@ export const UserProvider = ({ children }) => {
   useEffect(() => {
     loadUserData();
     
-  // fail-safe: ensure we don't stay in loading state indefinitely
     const timeout = setTimeout(() => {
       if (isLoading) {
         // loading timeout reached
@@ -180,11 +179,6 @@ export const UserProvider = ({ children }) => {
     }
   };
   
-
-  const oldLoginUser = async (email, password) => {
-    // legacy local-auth path removed; use server-backed login instead
-    return { success: false, error: 'legacy login not supported' };
-  };
 
   const logoutUser = async () => {
     try {

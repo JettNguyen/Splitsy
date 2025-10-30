@@ -1,14 +1,8 @@
-// api configuration
-// the app now uses ocr.space api for free text recognition
-// no api key required for basic usage
-
 export const API_CONFIG = {
-  // free ocr api configuration (ocr.space)
   OCR_API_URL: 'https://api.ocr.space/parse/image',
-  OCR_API_KEY: 'helloworld', // free tier api key (publicly available)
+  OCR_API_KEY: 'helloworld',
   
-  // ocr settings
-  OCR_ENABLED: true, // now enabled by default with free service
+  OCR_ENABLED: true,
   MAX_IMAGE_SIZE: 1000, // max width/height for ocr processing
   IMAGE_QUALITY: 0.9, // image compression quality (0.1 - 1.0)
   

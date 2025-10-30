@@ -29,6 +29,12 @@ npm install
 npm install expo
 cd backend
 npm install
+
+#install tesseract
+brew install tesseract (Mac)
+download through the tesseract installer page (Windows)
+
+In backend/python_ocr/main.py, select the tesseract path based on what OS you have
 ```
 
 #### 2. Use .env file (provided by me)
@@ -36,6 +42,7 @@ npm install
 
 #### 3. Update IP in `app.config.js`
 - If you do not know your IP, run ipconfig (Windows) or ifconfig (Mac)
+- Also update IP in ReceiptScanner.js for BACKEND_URL
 
 #### 4. Start the Application
 ```bash

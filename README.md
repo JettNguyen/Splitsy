@@ -22,22 +22,38 @@ A React Native app for tracking shared expenses with receipt scanning and automa
 
 #### 1. Clone and Install Dependencies
 
+##### Clone
+
 ```bash
-# clone the repository
 git clone https://github.com/JettNguyen/Splitsy.git
 cd Splitsy
+```
 
-# install dependencies
+##### Install Dependencies
+
+```bash
 npm install
 npm install expo
 cd backend
 npm install
-
-# install tesseract
-brew install tesseract # Mac
-# OR download through the tesseract installer page for Windows machines
-# In backend/python_ocr/main.py, select the tesseract path based on what OS you have
 ```
+
+##### Install Tesseract
+
+```bash
+# Mac
+brew install tesseract
+
+# OR download through the tesseract installer page for Windows machines with link below:
+```
+
+##### Windows install link:
+
+- [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
+
+##### Change `main.py`
+
+In backend/python_ocr/main.py, select the tesseract path based on what OS you have
 
 #### 2. Use .env file (provided by the team)
 
@@ -56,7 +72,9 @@ brew install tesseract # Mac
 # terminal 1: start backend server
 cd backend
 node server.js
+```
 
+```bash
 # OR use this: backend server that refreshes upon every change
 npm install -g nodemon
 nodemon server. js

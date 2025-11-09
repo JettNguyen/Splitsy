@@ -16,7 +16,7 @@ const OCR_PORT = PORT || '5000';
 // ios sim: http://127.0.0.1:5000/ocr
 // android emu: http://10.0.2.2:5000/ocr
 // real device: http://<your-computer-ip>:5000/ocr
-const BACKEND_URL = 'http://10.189.119.31:5000/ocr';   //`http://${OCR_HOST}:${OCR_PORT}/ocr`;
+const BACKEND_URL = 'http://192.168.0.38:5000/ocr';   //`http://${OCR_HOST}:${OCR_PORT}/ocr`;
 
 const ReceiptScanner = ({ visible, onClose, onReceiptScanned }) => {
   const { theme } = useTheme();

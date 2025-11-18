@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 import pytesseract
 import re
 import io
@@ -11,9 +11,9 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 
 # set tesseract path if needed (windows only)
-pytesseract.pytesseract.tesseract_cmd=r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-# pytesseract.pytesseract.tesseract_cmd=r'/opt/homebrew/bin/tesseract'
+# pytesseract.pytesseract.tesseract_cmd = r'/opt/homebrew/bin/tesseract'
 
 
 app = Flask(__name__)
@@ -96,10 +96,17 @@ def parse_text(text: str):
 
         name_part = clean_line[:m.start()].strip(" -:")
         qty = 1
-        qm = re.match(r"(\d+)\s+(.*)", name_part)
+        
+        qm = re.match(r"([1-9])\s*[xX]\s+(.*)", name_part)
         if qm:
             qty = int(qm.group(1))
             name_part = qm.group(2)
+        else:
+            #only remove single digit at very start if followed by space and long name
+            temp_match = re.match(r"^(\d+)\s+(.{10,})$", name_part)
+            if temp_match:
+                #likely a menu number
+                name_part = temp_match.group(2)
 
         if 2 <= len(name_part) <= 80:
             items.append({
@@ -165,11 +172,50 @@ def ocr():
         img_path.write_bytes(file_bytes)
 
         # open image
-        image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
-        gray = image.convert("L")
-
-        # run ocr
-        text = pytesseract.image_to_string(gray)
+        image = Image.open(io.BytesIO(file_bytes))
+        
+        # ensure RGB mode
+        if image.mode not in ['RGB', 'L']:
+            image = image.convert('RGB')
+        
+        # Try multiple preprocessing techniques
+        best_text = ""
+        
+        techniques = [
+            ("original", image),
+        ]
+        
+        # Add grayscale
+        gray = image.convert('L')
+        techniques.append(("grayscale", gray))
+        
+        # Add contrast enhancement
+        enhancer = ImageEnhance.Contrast(gray)
+        high_contrast = enhancer.enhance(2.0)
+        techniques.append(("high_contrast", high_contrast))
+        
+        # Add sharpening
+        sharpened = gray.filter(ImageFilter.SHARPEN)
+        techniques.append(("sharpened", sharpened))
+        
+        # Try thresholding (convert to pure black and white)
+        threshold = 128
+        bw = gray.point(lambda x: 0 if x < threshold else 255, '1')
+        techniques.append(("black_white", bw))
+        
+        # Try each technique
+        for name, img in techniques:
+            try:
+                temp_text = pytesseract.image_to_string(img, lang='eng')
+                char_count = len(temp_text.strip())
+                
+                if char_count > len(best_text.strip()):
+                    best_text = temp_text
+                    
+            except Exception as e:
+                continue
+        
+        text = best_text
         parsed = parse_text(text)
 
         # build json data

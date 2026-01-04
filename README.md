@@ -15,7 +15,7 @@ A React Native app for tracking shared expenses with receipt scanning and automa
 
 ### Demo Video
 
-[![Watch the Splitsy Product Presentation & Demo](docs/Splitsy_thumbnail.png)](https://youtu.be/0XIakB63Fs8)
+[![Watch the Splitsy Product Presentation & Demo](docs/Splitsy_Thumbnail.png)](https://youtu.be/0XIakB63Fs8)
 
 ### Papers
 

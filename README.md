@@ -11,6 +11,17 @@ A React Native app for tracking shared expenses with receipt scanning and automa
 - **Friend/Group Management**: Create and manage friends & groups
 - **Dark/Light Mode**: Theme switching
 
+## Showcase & Supporting Material
+
+### Demo Video
+
+[![Watch the Splitsy Product Presentation & Demo](docs/Splitsy_thumbnail.png)](https://youtu.be/0XIakB63Fs8)
+
+### Papers
+
+- [Splitsy Product Report](docs/Splitsy%20Final%20Report%20-%20Jain%20Shenoy%20Nguyen%20Kondapalli%20Shah.pdf) - Presents the user-centered research, 10-participant within-subject study, and findings showing Splitsy cuts task time by 33 seconds and lifts satisfaction to 88.3/100 versus manual splitting.
+- [Splitsy Implementation Report](docs/Splitsy%20Implementation%20Report%20-%20Jain%20Shenoy%20Nguyen%20Kondapalli%20Shah.pdf) - Covers design iterations, cross-platform architecture (React Native, Expo, Node/Express, MongoDB, JWT), the Python OCR microservice, testing process, and team reflections.
+
 ## Quick Start
 
 ### Prerequisites
